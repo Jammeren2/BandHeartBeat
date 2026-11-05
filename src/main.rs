@@ -9,7 +9,8 @@ use std::time::Duration;
 const HEART_RATE_SERVICE: uuid::Uuid = uuid::uuid!("0000180d-0000-1000-8000-00805f9b34fb");
 const HEART_RATE_MEASUREMENT: uuid::Uuid = uuid::uuid!("00002a37-0000-1000-8000-00805f9b34fb");
 
-#\[tokio::main\]\nasync fn main() -> Result<()> {\n    show_status_window();
+#[tokio::main]
+async fn main() -> Result<()> {
     println!("BandHeartBeat BLE heart-rate proof of concept");
     println!(
         "Enable HR Data Broadcasts on the band (Settings > HR Data Broadcasts) before scanning."
@@ -78,12 +79,3 @@ fn parse_bpm(data: &[u8]) -> Option<u16> {
         Some(u16::from_le_bytes([*data.get(1)?, *data.get(2)?]))
     }
 }
-
-#[cfg(target_os = "windows")]
-fn show_status_window() {
-    use windows::core::w;
-    use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
-    unsafe { let _ = MessageBoxW(None, w!("BandHeartBeat\n\nBLE monitor starting. Enable HR Data Broadcasts on the band."), w!("BandHeartBeat"), MB_OK | MB_ICONINFORMATION); }
-}
-#[cfg(not(target_os = "windows"))]
-fn show_status_window() {}
