@@ -4,6 +4,7 @@
 #include <iostream>
 
 int main() {
+    MFStartup(MF_VERSION);
     LPOLESTR value = nullptr;
     if (FAILED(StringFromCLSID(CLSID_BandHeartBeatSource, &value))) return 2;
     std::wcout << L"Source CLSID: " << value << L"\n";
@@ -17,10 +18,15 @@ int main() {
     std::cout << "CreatePlaceholderSource HRESULT: 0x" << std::hex << hr << std::dec << "\n";
     if (SUCCEEDED(hr)) {
         DWORD characteristics = 0; std::cout << "GetCharacteristics HRESULT: 0x" << std::hex << source->GetCharacteristics(&characteristics) << std::dec << "\n";
+        IMFPresentationDescriptor *pd = nullptr;
+        HRESULT descriptor = source->CreatePresentationDescriptor(&pd);
+        std::cout << "CreatePresentationDescriptor HRESULT: 0x" << std::hex << descriptor << std::dec << "\n";
+        if (SUCCEEDED(descriptor)) pd->Release();
         std::cout << "Shutdown HRESULT: 0x" << std::hex << source->Shutdown() << std::dec << "\n";
         source->Release();
     }
     FreeLibrary(dll);
+    MFShutdown();
     std::cout << "No MFCreateVirtualCamera call; no registration, camera activation, or telemetry performed.\n";
     return SUCCEEDED(hr) ? 0 : 4;
 }

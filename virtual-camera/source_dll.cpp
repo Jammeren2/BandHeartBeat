@@ -15,7 +15,23 @@ public:
     STDMETHODIMP_(ULONG) AddRef() override { return InterlockedIncrement(&refs_); }
     STDMETHODIMP_(ULONG) Release() override { ULONG n = InterlockedDecrement(&refs_); if (!n) delete this; return n; }
     STDMETHODIMP GetCharacteristics(DWORD *v) override { if (!v) return E_POINTER; *v = MFMEDIASOURCE_IS_LIVE; return S_OK; }
-    STDMETHODIMP CreatePresentationDescriptor(IMFPresentationDescriptor **v) override { if (v) *v = nullptr; return E_NOTIMPL; }
+    STDMETHODIMP CreatePresentationDescriptor(IMFPresentationDescriptor **v) override {
+        if (!v) return E_POINTER; *v = nullptr;
+        IMFMediaType *type = nullptr; IMFStreamDescriptor *sd = nullptr;
+        HRESULT hr = MFCreateMediaType(&type); if (FAILED(hr)) return hr;
+        hr = type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+        if (SUCCEEDED(hr)) hr = type->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
+        if (SUCCEEDED(hr)) hr = type->SetUINT32(MF_MT_AVG_BITRATE, 320u * 240u * 32u * 5u);
+        if (SUCCEEDED(hr)) hr = MFCreateStreamDescriptor(1, 1, &type, &sd);
+        type->Release();
+        if (FAILED(hr)) return hr;
+        IMFPresentationDescriptor *pd = nullptr;
+        hr = MFCreatePresentationDescriptor(1, &sd, &pd); sd->Release();
+        if (FAILED(hr)) return hr;
+        hr = pd->SelectStream(0);
+        if (SUCCEEDED(hr)) *v = pd; else pd->Release();
+        return hr;
+    }
     STDMETHODIMP Start(IMFPresentationDescriptor*, const GUID*, const PROPVARIANT*) override { return shutdown_ ? E_UNEXPECTED : E_NOTIMPL; }
     STDMETHODIMP Pause() override { return shutdown_ ? E_UNEXPECTED : E_NOTIMPL; }
     STDMETHODIMP Stop() override { return shutdown_ ? E_UNEXPECTED : E_NOTIMPL; }
