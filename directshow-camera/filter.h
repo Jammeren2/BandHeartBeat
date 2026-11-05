@@ -14,9 +14,9 @@ inline std::atomic<long> server_locks{0};
 extern const CLSID CLSID_BandHeartBeatDirectShow;
 inline HRESULT VideoType(AM_MEDIA_TYPE* t) {
  if(!t)return E_POINTER; ZeroMemory(t,sizeof(*t)); t->majortype=MEDIATYPE_Video;t->subtype=MEDIASUBTYPE_RGB32;t->formattype=FORMAT_VideoInfo;t->bFixedSizeSamples=TRUE;t->lSampleSize=640*480*4;t->cbFormat=sizeof(VIDEOINFOHEADER);
- t->pbFormat=static_cast<BYTE*>(CoTaskMemAlloc(t->cbFormat));if(!t->pbFormat)return E_OUTOFMEMORY;ZeroMemory(t->pbFormat,t->cbFormat);auto v=reinterpret_cast<VIDEOINFOHEADER*>(t->pbFormat);v->AvgTimePerFrame=2000000;v->bmiHeader.biSize=sizeof(BITMAPINFOHEADER);v->bmiHeader.biWidth=640;v->bmiHeader.biHeight=480;v->bmiHeader.biPlanes=1;v->bmiHeader.biBitCount=32;v->bmiHeader.biCompression=BI_RGB;v->bmiHeader.biSizeImage=t->lSampleSize;return S_OK;
+ t->pbFormat=static_cast<BYTE*>(CoTaskMemAlloc(t->cbFormat));if(!t->pbFormat)return E_OUTOFMEMORY;ZeroMemory(t->pbFormat,t->cbFormat);auto v=reinterpret_cast<VIDEOINFOHEADER*>(t->pbFormat);v->AvgTimePerFrame=666667;v->bmiHeader.biSize=sizeof(BITMAPINFOHEADER);v->bmiHeader.biWidth=640;v->bmiHeader.biHeight=480;v->bmiHeader.biPlanes=1;v->bmiHeader.biBitCount=32;v->bmiHeader.biCompression=BI_RGB;v->bmiHeader.biSizeImage=t->lSampleSize;return S_OK;
 }
-inline bool ValidType(const AM_MEDIA_TYPE*t){if(!t||t->majortype!=MEDIATYPE_Video||t->subtype!=MEDIASUBTYPE_RGB32||t->formattype!=FORMAT_VideoInfo||!t->pbFormat||t->cbFormat<sizeof(VIDEOINFOHEADER))return false;auto v=reinterpret_cast<const VIDEOINFOHEADER*>(t->pbFormat);return v->bmiHeader.biWidth==640&&v->bmiHeader.biHeight==480&&v->bmiHeader.biBitCount==32&&v->bmiHeader.biCompression==BI_RGB&&v->AvgTimePerFrame==2000000;}
+inline bool ValidType(const AM_MEDIA_TYPE*t){if(!t||t->majortype!=MEDIATYPE_Video||t->subtype!=MEDIASUBTYPE_RGB32||t->formattype!=FORMAT_VideoInfo||!t->pbFormat||t->cbFormat<sizeof(VIDEOINFOHEADER))return false;auto v=reinterpret_cast<const VIDEOINFOHEADER*>(t->pbFormat);return v->bmiHeader.biWidth==640&&v->bmiHeader.biHeight==480&&v->bmiHeader.biBitCount==32&&v->bmiHeader.biCompression==BI_RGB&&v->AvgTimePerFrame==666667;}
 class Types final:public IEnumMediaTypes { LONG refs=1;ULONG index=0;public:Types(){++live_objects;}~Types(){--live_objects;}
  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID r,void**o)override{if(!o)return E_POINTER;*o=nullptr;if(r!=IID_IUnknown&&r!=IID_IEnumMediaTypes)return E_NOINTERFACE;*o=static_cast<IEnumMediaTypes*>(this);AddRef();return S_OK;}
  ULONG STDMETHODCALLTYPE AddRef()override{return InterlockedIncrement(&refs);}ULONG STDMETHODCALLTYPE Release()override{auto n=InterlockedDecrement(&refs);if(!n)delete this;return n;}
@@ -30,7 +30,7 @@ class Pin final:public IPin, public IAMStreamConfig, public IKsPropertySet { Fil
  HRESULT STDMETHODCALLTYPE SetFormat(AM_MEDIA_TYPE*t)override;
  HRESULT STDMETHODCALLTYPE GetFormat(AM_MEDIA_TYPE**t)override{if(!t)return E_POINTER;*t=static_cast<AM_MEDIA_TYPE*>(CoTaskMemAlloc(sizeof(AM_MEDIA_TYPE)));return *t?VideoType(*t):E_OUTOFMEMORY;}
  HRESULT STDMETHODCALLTYPE GetNumberOfCapabilities(int*n,int*z)override{if(!n||!z)return E_POINTER;*n=1;*z=sizeof(VIDEO_STREAM_CONFIG_CAPS);return S_OK;}
- HRESULT STDMETHODCALLTYPE GetStreamCaps(int i,AM_MEDIA_TYPE**t,BYTE*c)override{if(i!=0)return S_FALSE;if(!c)return E_POINTER;auto hr=GetFormat(t);if(FAILED(hr))return hr;auto v=reinterpret_cast<VIDEO_STREAM_CONFIG_CAPS*>(c);ZeroMemory(v,sizeof(*v));v->guid=FORMAT_VideoInfo;v->InputSize={640,480};v->MinOutputSize=v->MaxOutputSize=v->InputSize;v->MinFrameInterval=v->MaxFrameInterval=2000000;v->MinBitsPerSecond=v->MaxBitsPerSecond=640*480*32*5;return S_OK;}
+ HRESULT STDMETHODCALLTYPE GetStreamCaps(int i,AM_MEDIA_TYPE**t,BYTE*c)override{if(i!=0)return S_FALSE;if(!c)return E_POINTER;auto hr=GetFormat(t);if(FAILED(hr))return hr;auto v=reinterpret_cast<VIDEO_STREAM_CONFIG_CAPS*>(c);ZeroMemory(v,sizeof(*v));v->guid=FORMAT_VideoInfo;v->InputSize={640,480};v->MinOutputSize=v->MaxOutputSize=v->InputSize;v->MinFrameInterval=v->MaxFrameInterval=666667;v->MinBitsPerSecond=v->MaxBitsPerSecond=640*480*32*15;return S_OK;}
  HRESULT STDMETHODCALLTYPE Set(REFGUID,DWORD,LPVOID,DWORD,LPVOID,DWORD)override{return E_NOTIMPL;}
  HRESULT STDMETHODCALLTYPE Get(REFGUID g,DWORD id,LPVOID,DWORD,LPVOID data,DWORD size,DWORD*ret)override{if(g!=AMPROPSETID_Pin||id!=AMPROPERTY_PIN_CATEGORY)return E_PROP_ID_UNSUPPORTED;if(ret)*ret=sizeof(GUID);if(!data)return S_OK;if(size<sizeof(GUID))return E_UNEXPECTED;*static_cast<GUID*>(data)=PIN_CATEGORY_CAPTURE;return S_OK;}
  HRESULT STDMETHODCALLTYPE QuerySupported(REFGUID g,DWORD id,DWORD*o)override{if(!o)return E_POINTER;*o=0;if(g!=AMPROPSETID_Pin||id!=AMPROPERTY_PIN_CATEGORY)return E_PROP_ID_UNSUPPORTED;*o=KSPROPERTY_SUPPORT_GET;return S_OK;}
@@ -79,15 +79,17 @@ inline void Pin::StartDelivery(){
    BYTE*p=nullptr;hr=s->GetPointer(&p);
    if(SUCCEEDED(hr)){
     for(int y=0;y<480;y++)for(int x=0;x<640;x++){int i=(y*640+x)*4;bool mark=(x/40+y/40)%2;p[i]=mark?0x73:0x20;p[i+1]=mark?0x8b:0x20;p[i+2]=mark?0xff:0x20;p[i+3]=0xff;}
+    HDC dc=CreateCompatibleDC(nullptr);BITMAPINFO bi{};bi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);bi.bmiHeader.biWidth=640;bi.bmiHeader.biHeight=480;bi.bmiHeader.biPlanes=1;bi.bmiHeader.biBitCount=32;void*bits=nullptr;HBITMAP bitmap=CreateDIBSection(dc,&bi,DIB_RGB_COLORS,&bits,nullptr,0);
+    if(bitmap&&bits){auto old=SelectObject(dc,bitmap);memcpy(bits,p,640*480*4);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,RGB(255,255,255));TextOutW(dc,180,220,L"PLACEHOLDER - NO CAMERA",23);memcpy(p,bits,640*480*4);SelectObject(dc,old);}if(bitmap)DeleteObject(bitmap);DeleteDC(dc);
     // Fixed-size, versioned latest-frame IPC; mutex protects publication/copy.
     HANDLE map=OpenFileMappingW(FILE_MAP_READ,FALSE,BH_SHM_NAME);
     if(map){auto view=static_cast<const BYTE*>(MapViewOfFile(map,FILE_MAP_READ,0,0,sizeof(BhFrameHeader)+640*480*4));HANDLE gate=OpenMutexW(SYNCHRONIZE|MUTEX_MODIFY_STATE,FALSE,L"Local\\BandHeartBeatFrameMutex");
      DWORD waited=(view&&gate)?WaitForSingleObject(gate,0):WAIT_TIMEOUT; if(waited==WAIT_OBJECT_0){auto h=reinterpret_cast<const BhFrameHeader*>(view);if(h->magic==0x42484247&&h->version==1&&h->width==640&&h->height==480&&h->stride==2560&&h->bytes==640*480*4)memcpy(p,view+sizeof(BhFrameHeader),h->bytes);ReleaseMutex(gate);}else if(waited==WAIT_ABANDONED){ReleaseMutex(gate);}
      if(gate)CloseHandle(gate);if(view)UnmapViewOfFile(view);CloseHandle(map);}
-    REFERENCE_TIME end=time+2000000;s->SetTime(&time,&end);s->SetActualDataLength(640*480*4);s->SetSyncPoint(TRUE);s->SetDiscontinuity(first);first=false;time=end;hr=input->Receive(s);
+    REFERENCE_TIME end=time+666667;s->SetTime(&time,&end);s->SetActualDataLength(640*480*4);s->SetSyncPoint(TRUE);s->SetDiscontinuity(first);first=false;time=end;hr=input->Receive(s);
    }
    s->Release();if(FAILED(hr))break;
-   std::unique_lock<std::mutex>l(mutex);if(wake.wait_for(l,std::chrono::milliseconds(200),[this]{return quitting||!running;})&&quitting)break;
+   std::unique_lock<std::mutex>l(mutex);if(wake.wait_for(l,std::chrono::milliseconds(67),[this]{return quitting||!running;})&&quitting)break;
   }
   CoUninitialize();
  });

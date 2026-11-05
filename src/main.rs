@@ -28,11 +28,21 @@ static WORKING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::n
 static UI_TX: OnceLock<mpsc::Sender<UiMessage>> = OnceLock::new();
 static UI_DATA: OnceLock<Mutex<UiData>> = OnceLock::new();
 static UI_RX: OnceLock<Mutex<mpsc::Receiver<UiMessage>>> = OnceLock::new();
+static CAMERA_DIRTY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static CAMERA: Mutex<Option<std::process::Child>> = Mutex::new(None);
+static CAMERA_STATUS: Mutex<String> = Mutex::new(String::new());
+static CAMERA_NAMES: Mutex<Vec<(usize, String)>> = Mutex::new(Vec::new());
+static CAMERA_ERROR: Mutex<String> = Mutex::new(String::new());
 const WM_TRAY: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 1;
 const ID_TRAY_SHOW: usize = 1001;
 const ID_TRAY_RETRY: usize = 1002;
 const ID_TRAY_QUIT: usize = 1003;
 const ID_TRAY_OVERLAY: usize = 1004;
+const ID_CAMERA_START: usize = 1010;
+const ID_CAMERA_STOP: usize = 1011;
+const ID_CAMERA_DEMO: usize = 1012;
+const ID_CAMERA_REGISTER: usize = 1013;
+const ID_CAMERA_REMOVE: usize = 1014;
 
 #[cfg(target_os = "windows")]
 fn main() -> Result<()> {
@@ -71,6 +81,7 @@ fn run_windows() -> Result<()> {
     UI_TX.set(tx).ok();
     let overlay_error = overlay::start().err();
     start_worker();
+    camera_list();
 
     unsafe extern "system" fn wnd_proc(
         hwnd: HWND,
@@ -85,7 +96,24 @@ fn run_windows() -> Result<()> {
                 return LRESULT(0);
             }
             WM_TIMER => {
-                let mut changed = false;
+                let mut changed = CAMERA_DIRTY.swap(false, std::sync::atomic::Ordering::AcqRel);
+                if let Ok(mut camera) = CAMERA.lock() {
+                    if let Some(child) = camera.as_mut() {
+                        if let Ok(Some(code)) = child.try_wait() {
+                            if let Ok(mut status) = CAMERA_STATUS.lock() {
+                                *status = if code.success() {
+                                    "Камера остановлена".into()
+                                } else {
+                                    let detail =
+                                        CAMERA_ERROR.lock().map(|e| e.clone()).unwrap_or_default();
+                                    format!("Ошибка камеры ({code}): {detail}")
+                                };
+                            }
+                            *camera = None;
+                            changed = true;
+                        }
+                    }
+                }
                 if let Some(rx) = UI_RX.get() {
                     if let Ok(rx) = rx.lock() {
                         if let Some(Ok(mut data)) = UI_DATA.get().map(|d| d.lock()) {
@@ -151,6 +179,9 @@ fn run_windows() -> Result<()> {
                         0x00868c98,
                         "Закрытие окна сворачивает в трей",
                     );
+                    if let Ok(status) = CAMERA_STATUS.lock() {
+                        draw_text(hdc, 26, 210, 13, 400, 0x00a8adb8, &status);
+                    }
                 }
                 let _ = EndPaint(hwnd, &ps);
                 return LRESULT(0);
@@ -185,6 +216,12 @@ fn run_windows() -> Result<()> {
                     ID_TRAY_QUIT => {
                         let _ = DestroyWindow(hwnd);
                     }
+                    ID_CAMERA_START => camera_list(),
+                    ID_CAMERA_DEMO => camera_start(0, true),
+                    ID_CAMERA_STOP => camera_stop(),
+                    ID_CAMERA_REGISTER => camera_admin("--register"),
+                    ID_CAMERA_REMOVE => camera_admin("--unregister"),
+                    id if (1100..1200).contains(&id) => camera_start(id - 1100, false),
                     _ => {}
                 }
                 return LRESULT(0);
@@ -199,6 +236,58 @@ fn run_windows() -> Result<()> {
                         return LRESULT(0);
                     };
                     let _ = AppendMenuW(menu, MF_STRING, ID_TRAY_SHOW, w!("Показать"));
+                    if let Ok(cameras) = CreatePopupMenu() {
+                        if let Ok(names) = CAMERA_NAMES.lock() {
+                            for (index, name) in names.iter().take(100) {
+                                let text: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
+                                let _ = AppendMenuW(
+                                    cameras,
+                                    MF_STRING,
+                                    1100 + index,
+                                    PCWSTR(text.as_ptr()),
+                                );
+                            }
+                            if names.is_empty() {
+                                let _ = AppendMenuW(
+                                    cameras,
+                                    MF_STRING | MF_GRAYED,
+                                    0,
+                                    w!("Нет доступных камер"),
+                                );
+                            }
+                        }
+                        let _ = AppendMenuW(
+                            cameras,
+                            MF_STRING,
+                            ID_CAMERA_START,
+                            w!("Обновить список камер"),
+                        );
+                        let _ = AppendMenuW(
+                            menu,
+                            MF_POPUP,
+                            cameras.0 as usize,
+                            w!("Камера: выбрать и запустить"),
+                        );
+                    }
+                    let _ = AppendMenuW(
+                        menu,
+                        MF_STRING,
+                        ID_CAMERA_DEMO,
+                        w!("Камера: демо без веб-камеры"),
+                    );
+                    let _ = AppendMenuW(menu, MF_STRING, ID_CAMERA_STOP, w!("Камера: остановить"));
+                    let _ = AppendMenuW(
+                        menu,
+                        MF_STRING,
+                        ID_CAMERA_REGISTER,
+                        w!("Установить виртуальную камеру (текущий пользователь)"),
+                    );
+                    let _ = AppendMenuW(
+                        menu,
+                        MF_STRING,
+                        ID_CAMERA_REMOVE,
+                        w!("Удалить виртуальную камеру"),
+                    );
                     let _ =
                         AppendMenuW(menu, MF_STRING, ID_TRAY_OVERLAY, w!("Открыть оверлей OBS"));
                     let _ =
@@ -222,6 +311,7 @@ fn run_windows() -> Result<()> {
                 return LRESULT(0);
             }
             WM_DESTROY => {
+                camera_stop();
                 let mut nid = NOTIFYICONDATAW::default();
                 nid.cbSize = std::mem::size_of::<NOTIFYICONDATAW>() as u32;
                 nid.hWnd = hwnd;
@@ -255,7 +345,7 @@ fn run_windows() -> Result<()> {
             CW_USEDEFAULT,
             CW_USEDEFAULT,
             390,
-            260,
+            300,
             None,
             None,
             Some(instance),
@@ -397,6 +487,119 @@ fn start_worker() {
             let _ = tx.send(UiMessage::Status(message, false));
         }
         WORKING.store(false, Ordering::Release);
+    });
+}
+
+fn camera_list() {
+    use std::os::windows::process::CommandExt;
+    std::thread::spawn(|| {
+        let result = std::env::current_exe().and_then(|exe| {
+            std::process::Command::new(exe.with_file_name("camera-producer.exe"))
+                .arg("--list-machine")
+                .creation_flags(0x08000000)
+                .output()
+        });
+        if let Ok(output) = result {
+            let names = String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .filter_map(|line| {
+                    let (index, name) = line.split_once('\t')?;
+                    Some((index.parse::<usize>().ok()?, name.to_owned()))
+                })
+                .collect();
+            if let Ok(mut list) = CAMERA_NAMES.lock() {
+                *list = names;
+            }
+            CAMERA_DIRTY.store(true, std::sync::atomic::Ordering::Release);
+        }
+    });
+}
+
+fn camera_start(index: usize, demo: bool) {
+    CAMERA_DIRTY.store(true, std::sync::atomic::Ordering::Release);
+    use std::os::windows::process::CommandExt;
+    let Ok(mut camera) = CAMERA.lock() else {
+        return;
+    };
+    if camera.is_some() {
+        return;
+    }
+    let result = std::env::current_exe().and_then(|exe| {
+        let mut command = std::process::Command::new(exe.with_file_name("camera-producer.exe"));
+        if demo {
+            command.arg("--mock");
+        } else {
+            command.args(["--camera", &index.to_string()]);
+        }
+        command
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped())
+            .creation_flags(0x08000000)
+            .spawn()
+    });
+    if let Ok(mut status) = CAMERA_STATUS.lock() {
+        match result {
+            Ok(mut child) => {
+                if let Ok(mut error) = CAMERA_ERROR.lock() {
+                    error.clear();
+                }
+                if let Some(mut stderr) = child.stderr.take() {
+                    std::thread::spawn(move || {
+                        use std::io::Read;
+                        let mut buffer = [0; 512];
+                        while let Ok(n) = stderr.read(&mut buffer) {
+                            if n == 0 {
+                                break;
+                            }
+                            if let Ok(mut error) = CAMERA_ERROR.lock() {
+                                *error = String::from_utf8_lossy(&buffer[..n]).into_owned();
+                            }
+                        }
+                    });
+                }
+                *camera = Some(child);
+                *status = if demo {
+                    "Камера: ДЕМО без веб-камеры".into()
+                } else {
+                    "Камера запущена".into()
+                };
+            }
+            Err(error) => *status = format!("Не удалось запустить camera-producer.exe: {error}"),
+        }
+    }
+}
+
+fn camera_stop() {
+    use std::os::windows::process::CommandExt;
+    if let Ok(exe) = std::env::current_exe() {
+        let _ = std::process::Command::new(exe.with_file_name("camera-producer.exe"))
+            .arg("--stop")
+            .creation_flags(0x08000000)
+            .spawn();
+    }
+}
+
+fn camera_admin(arg: &str) {
+    use std::os::windows::process::CommandExt;
+    let arg = arg.to_owned();
+    std::thread::spawn(move || {
+        let result = std::env::current_exe().and_then(|exe| {
+            std::process::Command::new(exe.with_file_name("camera-admin.exe"))
+                .arg(&arg)
+                .creation_flags(0x08000000)
+                .status()
+        });
+        let text = match result {
+            Ok(code) if code.success() => "Операция виртуальной камеры выполнена".into(),
+            Ok(code) => {
+                format!("Ошибка регистрации ({code}). Запустите camera-admin.exe в консоли.")
+            }
+            Err(error) => format!("camera-admin.exe: {error}"),
+        };
+        if let Ok(mut status) = CAMERA_STATUS.lock() {
+            *status = text;
+            CAMERA_DIRTY.store(true, std::sync::atomic::Ordering::Release);
+        }
     });
 }
 

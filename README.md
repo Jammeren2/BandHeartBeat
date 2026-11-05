@@ -1,5 +1,7 @@
 # BandHeartBeat
 
+Самостоятельная сборка без OBS: `dist/standalone/BandHeartBeat.exe`. Нативное меню камер, установка/откат и ограничения описаны в [инструкции](directshow-camera/STANDALONE-RU.md). Сборка пакета: `cmd /c directshow-camera\package-msvc.cmd`. Ниже сохранён запасной OBS-путь.
+
 Lightweight native Windows heart-rate monitor. Use a device broadcasting the standard Bluetooth SIG Heart Rate Service (0x180D), keep Windows Bluetooth on, then open `target/release/band-heart-beat.exe`.
 
 The compact dark window shows real BLE heart-rate measurements. Closing or minimizing hides it in the notification area. Left-click its tray icon to show it; right-click for **Показать**, **Повторить подключение**, or **Выйти**. Retry starts a fresh scan after a failure; an active scan/connection is never duplicated. No readings for 20 seconds ends the connection and clears the value.

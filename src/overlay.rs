@@ -53,6 +53,20 @@ fn serve(mut stream: TcpStream) -> std::io::Result<()> {
         );
     }
     match first {
+        "GET /telemetry HTTP/1.1" => {
+            let data = super::UI_DATA.get().and_then(|d| d.lock().ok());
+            let body = data
+                .map(|d| {
+                    format!(
+                        "{} {} {}",
+                        d.bpm,
+                        u8::from(d.live),
+                        u8::from(std::env::args().any(|a| a == "--demo"))
+                    )
+                })
+                .unwrap_or_else(|| "0 0 0".into());
+            response(&mut stream, "200 OK", "text/plain", body.as_bytes())
+        }
         "GET /overlay HTTP/1.1" | "GET / HTTP/1.1" => response(
             &mut stream,
             "200 OK",
