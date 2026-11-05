@@ -1,4 +1,5 @@
 #![windows_subsystem = "windows"]
+mod overlay;
 use anyhow::{Context, Result};
 use btleplug::api::{
     Central, Characteristic, Manager as _, Peripheral as _, ScanFilter, ValueNotification,
@@ -31,6 +32,7 @@ const WM_TRAY: u32 = windows::Win32::UI::WindowsAndMessaging::WM_APP + 1;
 const ID_TRAY_SHOW: usize = 1001;
 const ID_TRAY_RETRY: usize = 1002;
 const ID_TRAY_QUIT: usize = 1003;
+const ID_TRAY_OVERLAY: usize = 1004;
 
 #[cfg(target_os = "windows")]
 fn main() -> Result<()> {
@@ -67,6 +69,7 @@ fn run_windows() -> Result<()> {
     let (tx, rx) = mpsc::channel();
     UI_RX.set(Mutex::new(rx)).ok();
     UI_TX.set(tx).ok();
+    let overlay_error = overlay::start().err();
     start_worker();
 
     unsafe extern "system" fn wnd_proc(
@@ -163,11 +166,21 @@ fn run_windows() -> Result<()> {
             WM_COMMAND => {
                 match (wparam.0 & 0xffff) as usize {
                     ID_TRAY_SHOW => {
-                        let _ = ShowWindow(hwnd, SW_SHOW);
+                        let _ = ShowWindow(hwnd, SW_RESTORE);
                         let _ = SetForegroundWindow(hwnd);
                     }
                     ID_TRAY_RETRY => {
                         start_worker();
+                    }
+                    ID_TRAY_OVERLAY => {
+                        let _ = windows::Win32::UI::Shell::ShellExecuteW(
+                            Some(hwnd),
+                            w!("open"),
+                            w!("http://127.0.0.1:8765/overlay"),
+                            None,
+                            None,
+                            SW_SHOWNORMAL,
+                        );
                     }
                     ID_TRAY_QUIT => {
                         let _ = DestroyWindow(hwnd);
@@ -179,13 +192,15 @@ fn run_windows() -> Result<()> {
             WM_TRAY => {
                 let event = (lparam.0 & 0xffff) as u32;
                 if event == WM_LBUTTONUP {
-                    let _ = ShowWindow(hwnd, SW_SHOW);
+                    let _ = ShowWindow(hwnd, SW_RESTORE);
                     let _ = SetForegroundWindow(hwnd);
                 } else if event == WM_RBUTTONUP {
                     let Ok(menu) = CreatePopupMenu() else {
                         return LRESULT(0);
                     };
                     let _ = AppendMenuW(menu, MF_STRING, ID_TRAY_SHOW, w!("Показать"));
+                    let _ =
+                        AppendMenuW(menu, MF_STRING, ID_TRAY_OVERLAY, w!("Открыть оверлей OBS"));
                     let _ =
                         AppendMenuW(menu, MF_STRING, ID_TRAY_RETRY, w!("Повторить подключение"));
                     let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
@@ -260,6 +275,15 @@ fn run_windows() -> Result<()> {
         let _ = Shell_NotifyIconW(NIM_ADD, &nid);
         let _ = ShowWindow(hwnd, SW_SHOW);
         let _ = UpdateWindow(hwnd);
+        if let Some(error) = overlay_error {
+            let message: Vec<u16> = format!("Оверлей недоступен: порт 127.0.0.1:8765 занят или заблокирован. Закройте другой экземпляр и перезапустите приложение.\n{error}\0").encode_utf16().collect();
+            MessageBoxW(
+                Some(hwnd),
+                PCWSTR(message.as_ptr()),
+                w!("BandHeartBeat · OBS"),
+                MB_OK | MB_ICONWARNING,
+            );
+        }
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).0 > 0 {
             let _ = TranslateMessage(&msg);

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BandHeartBeat · OBS overlay</title>
+<style>
+:root {color-scheme:dark;--beat:0.833s}*{box-sizing:border-box}
+html,body{margin:0;background:transparent!important;overflow:hidden}
+body{font-family:'Segoe UI',sans-serif;color:#fff}
+.widget{display:inline-flex;flex-direction:column;padding:22px 28px;filter:drop-shadow(0 2px 5px #000a)}
+.reading{display:flex;align-items:center;gap:22px}
+.heart{width:72px;height:72px;fill:#ff8b73;transform-origin:center;opacity:.55}
+.active .heart{opacity:1;animation:heartbeat var(--beat) ease-in-out infinite}
+.bpm{font-size:92px;line-height:1;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-4px}
+.unit{font-size:18px;letter-spacing:.06em;color:#ffb9aa;margin-top:7px}
+.state{max-width:390px;font-size:15px;margin-top:14px;color:#f3d7d1}
+.demo{display:none;color:#ffd69a;font-size:13px;font-weight:700;letter-spacing:.14em;margin-top:9px}
+.is-demo .demo{display:block}
+@keyframes heartbeat{0%,100%{transform:scale(1)}12%{transform:scale(1.16)}26%{transform:scale(1)}38%{transform:scale(1.08)}55%{transform:scale(1)}}
+@media(prefers-reduced-motion:reduce){.active .heart{animation:none}}
+</style>
+<div class="widget" id="widget">
+ <div class="reading"><svg class="heart" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 56C25 50 5 36 5 21 5 3 25 1 32 15 39 1 59 3 59 21 59 36 39 50 32 56Z"/></svg>
+ <div><div class="bpm" id="bpm">—</div><div class="unit">УД / МИН</div></div></div>
+ <div class="state" id="status">Ожидание приложения…</div>
+ <div class="demo">ДЕМО · БЕЗ БРАСЛЕТА</div>
+</div>
+<script>
+const widget=document.getElementById('widget'),bpm=document.getElementById('bpm'),status=document.getElementById('status');
+let last=0;
+function offline(){widget.classList.remove('active','is-demo');bpm.textContent='—';status.textContent='Нет связи с приложением';}
+const events=new EventSource('/events');
+events.onmessage=event=>{try{const data=JSON.parse(event.data);last=Date.now();
+ const valid=Number.isInteger(data.bpm)&&data.bpm>0&&(data.live||data.demo);
+ bpm.textContent=valid?data.bpm:'—';status.textContent=data.status;
+ widget.classList.toggle('active',valid);widget.classList.toggle('is-demo',data.demo===true);
+ if(valid)widget.style.setProperty('--beat',(60/Math.min(300,Math.max(25,data.bpm)))+'s');
+}catch{offline()}};
+events.onerror=offline;
+setInterval(()=>{if(last&&Date.now()-last>4000)offline()},1000);
+// Animation illustrates the BPM rate. It is not measured beat timing.
+</script>
+</html>
