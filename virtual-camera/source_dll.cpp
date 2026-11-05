@@ -91,12 +91,13 @@ STDAPI DllGetClassObject(REFCLSID clsid, REFIID riid, LPVOID *out) {
     if (!out) return E_POINTER; *out=nullptr; if (!IsEqualCLSID(clsid, CLSID_BandHeartBeatSource)) return CLASS_E_CLASSNOTAVAILABLE; Factory *f=new(std::nothrow) Factory(); if(!f) return E_OUTOFMEMORY; HRESULT hr=f->QueryInterface(riid,out); f->Release(); return hr;
 }
 STDAPI DllCanUnloadNow() { return S_OK; }
+static HMODULE self_module = nullptr;
 static HRESULT RegisterCurrentUserSource() {
     wchar_t guid[64]; StringFromGUID2(CLSID_BandHeartBeatSource, guid, 64);
     wchar_t key[256]; StringCchPrintfW(key, 256, L"Software\\Classes\\CLSID\\%s\\InprocServer32", guid);
     HKEY h = nullptr; LONG e = RegCreateKeyExW(HKEY_CURRENT_USER, key, 0, nullptr, 0, KEY_WRITE, nullptr, &h, nullptr);
     if (e != ERROR_SUCCESS) return HRESULT_FROM_WIN32(e);
-    wchar_t path[MAX_PATH]; DWORD n = GetModuleFileNameW(nullptr, path, MAX_PATH);
+    wchar_t path[MAX_PATH]; DWORD n = GetModuleFileNameW(self_module, path, MAX_PATH);
     if (!n || RegSetValueExW(h, nullptr, 0, REG_SZ, reinterpret_cast<const BYTE*>(path), (n+1)*sizeof(wchar_t)) != ERROR_SUCCESS) { RegCloseKey(h); return E_FAIL; }
     const wchar_t *model=L"Both"; e=RegSetValueExW(h,L"ThreadingModel",0,REG_SZ,reinterpret_cast<const BYTE*>(model),6*sizeof(wchar_t)); RegCloseKey(h); return HRESULT_FROM_WIN32(e);
 }
@@ -104,4 +105,4 @@ static HRESULT UnregisterCurrentUserSource() { wchar_t guid[64], key[256]; Strin
 STDAPI DllRegisterServer() { return RegisterCurrentUserSource(); }
 STDAPI DllUnregisterServer() { return UnregisterCurrentUserSource(); }
 
-BOOL WINAPI DllMain(HINSTANCE, DWORD, LPVOID) { return TRUE; }
+BOOL WINAPI DllMain(HINSTANCE module, DWORD reason, LPVOID) { if(reason==DLL_PROCESS_ATTACH)self_module=module; return TRUE; }
