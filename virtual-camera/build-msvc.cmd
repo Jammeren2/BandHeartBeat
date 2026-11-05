@@ -8,4 +8,5 @@ cl /nologo /std:c++17 /EHsc /W4 /LD virtual-camera\source_dll.cpp /I"C:\Program 
 if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++17 /EHsc /W4 virtual-camera\source_probe.cpp /I"C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um" /I"C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared" /link /OUT:"%OUT%\source-probe.exe" ole32.lib mfplat.lib mfsensorgroup.lib
 cl /nologo /std:c++17 /EHsc /W4 virtual-camera\activation_probe.cpp /I"C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um" /I"C:\Program Files (x86)\Windows Kits\10.0.26100.0\shared" /link /OUT:"%OUT%\activation-probe.exe" ole32.lib mfplat.lib mfsensorgroup.lib
+cl /nologo /std:c++17 /EHsc /c virtual-camera\imf_activate_wrapper.generated.cpp /I"C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\um" /I"C:\Program Files (x86)\Windows Kits\10\Include\10.0.26100.0\shared" /Fo"%OUT%\imf_activate_wrapper.generated.obj"
 exit /b %errorlevel%
