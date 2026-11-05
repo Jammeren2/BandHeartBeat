@@ -11,6 +11,8 @@ const HEART_RATE_MEASUREMENT: uuid::Uuid = uuid::uuid!("00002a37-0000-1000-8000-
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    #[cfg(target_os = "windows")]
+    show_status();
     println!("BandHeartBeat BLE heart-rate proof of concept");
     println!(
         "Enable HR Data Broadcasts on the band (Settings > HR Data Broadcasts) before scanning."
@@ -69,6 +71,20 @@ async fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(target_os = "windows")]
+fn show_status() {
+    use windows::core::w;
+    use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONINFORMATION, MB_OK};
+    unsafe {
+        let _ = MessageBoxW(
+            None,
+            w!("BandHeartBeat\nDemo mode — BLE monitor starting"),
+            w!("BandHeartBeat"),
+            MB_OK | MB_ICONINFORMATION,
+        );
+    }
 }
 
 fn parse_bpm(data: &[u8]) -> Option<u16> {
