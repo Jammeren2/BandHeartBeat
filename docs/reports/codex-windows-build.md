@@ -4,4 +4,5 @@ The MSVC command remains blocked by missing `link.exe`, but the installed GNU Ru
 
 `rustup run stable-x86_64-pc-windows-gnu cargo build --release`
 
-Build succeeded. Artifact: `target\\release\\band-heart-beat.exe` (size: 2,621,952 bytes). This is a MinGW GNU-target executable; no Huawei hardware was available, so runtime BLE validation was not performed. The MSVC alternative remains `cargo build --release` from a Visual Studio Developer PowerShell.
+Build succeeded. Artifact: `target\\release\\band-heart-beat.exe` (size: 3,168,719 bytes). This is a MinGW GNU-target executable; no Huawei hardware was available, so runtime BLE validation was not performed. The MSVC alternative remains `cargo build --release` from a Visual Studio Developer PowerShell.
+
