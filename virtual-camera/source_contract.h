@@ -13,5 +13,3 @@ inline constexpr CLSID CLSID_BandHeartBeatSource =
 
 // No registration is performed by this prototype. These are the explicit
 // operations a future current-user installer/cleanup layer must implement.
-HRESULT RegisterCurrentUserSource();
-HRESULT UnregisterCurrentUserSource();

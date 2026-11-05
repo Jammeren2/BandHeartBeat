@@ -1,6 +1,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include "source_contract.h"
 #include <new>
+#include <strsafe.h>
 
 class PlaceholderStream final : public IMFMediaStream {
     volatile long refs_ = 1; LONGLONG next_time_ = 0; bool stopped_ = false; IMFMediaEventQueue *queue_ = nullptr;
@@ -90,10 +91,17 @@ STDAPI DllGetClassObject(REFCLSID clsid, REFIID riid, LPVOID *out) {
     if (!out) return E_POINTER; *out=nullptr; if (!IsEqualCLSID(clsid, CLSID_BandHeartBeatSource)) return CLASS_E_CLASSNOTAVAILABLE; Factory *f=new(std::nothrow) Factory(); if(!f) return E_OUTOFMEMORY; HRESULT hr=f->QueryInterface(riid,out); f->Release(); return hr;
 }
 STDAPI DllCanUnloadNow() { return S_OK; }
-STDAPI DllRegisterServer() { return E_NOTIMPL; }
-STDAPI DllUnregisterServer() { return E_NOTIMPL; }
-
-HRESULT RegisterCurrentUserSource() { return E_NOTIMPL; }
-HRESULT UnregisterCurrentUserSource() { return E_NOTIMPL; }
+static HRESULT RegisterCurrentUserSource() {
+    wchar_t guid[64]; StringFromGUID2(CLSID_BandHeartBeatSource, guid, 64);
+    wchar_t key[256]; StringCchPrintfW(key, 256, L"Software\\Classes\\CLSID\\%s\\InprocServer32", guid);
+    HKEY h = nullptr; LONG e = RegCreateKeyExW(HKEY_CURRENT_USER, key, 0, nullptr, 0, KEY_WRITE, nullptr, &h, nullptr);
+    if (e != ERROR_SUCCESS) return HRESULT_FROM_WIN32(e);
+    wchar_t path[MAX_PATH]; DWORD n = GetModuleFileNameW(nullptr, path, MAX_PATH);
+    if (!n || RegSetValueExW(h, nullptr, 0, REG_SZ, reinterpret_cast<const BYTE*>(path), (n+1)*sizeof(wchar_t)) != ERROR_SUCCESS) { RegCloseKey(h); return E_FAIL; }
+    const wchar_t *model=L"Both"; e=RegSetValueExW(h,L"ThreadingModel",0,REG_SZ,reinterpret_cast<const BYTE*>(model),6*sizeof(wchar_t)); RegCloseKey(h); return HRESULT_FROM_WIN32(e);
+}
+static HRESULT UnregisterCurrentUserSource() { wchar_t guid[64], key[256]; StringFromGUID2(CLSID_BandHeartBeatSource,guid,64); StringCchPrintfW(key,256,L"Software\\Classes\\CLSID\\%s",guid); LONG e=RegDeleteTreeW(HKEY_CURRENT_USER,key); return e==ERROR_FILE_NOT_FOUND?S_OK:HRESULT_FROM_WIN32(e); }
+STDAPI DllRegisterServer() { return RegisterCurrentUserSource(); }
+STDAPI DllUnregisterServer() { return UnregisterCurrentUserSource(); }
 
 BOOL WINAPI DllMain(HINSTANCE, DWORD, LPVOID) { return TRUE; }
