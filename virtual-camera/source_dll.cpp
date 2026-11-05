@@ -26,8 +26,10 @@ public:
 extern "C" __declspec(dllexport) HRESULT __stdcall CreatePlaceholderStream(IMFMediaStream **o){if(!o)return E_POINTER;*o=new(std::nothrow)PlaceholderStream();return *o?S_OK:E_OUTOFMEMORY;}
 
 class PlaceholderSource final : public IMFMediaSource {
-    volatile long refs_ = 1; bool shutdown_ = false;
+    volatile long refs_ = 1; bool shutdown_ = false; PlaceholderStream *stream_ = nullptr;
 public:
+    PlaceholderSource() : stream_(new(std::nothrow) PlaceholderStream()) {}
+    ~PlaceholderSource() { if (stream_) stream_->Release(); }
     STDMETHODIMP QueryInterface(REFIID riid, void **out) override {
         if (!out) return E_POINTER; *out = nullptr;
         if (riid == IID_IUnknown || riid == __uuidof(IMFMediaSource) || riid == __uuidof(IMFMediaEventGenerator)) {
@@ -55,10 +57,10 @@ public:
         if (SUCCEEDED(hr)) *v = pd; else pd->Release();
         return hr;
     }
-    STDMETHODIMP Start(IMFPresentationDescriptor*, const GUID*, const PROPVARIANT*) override { return shutdown_ ? E_UNEXPECTED : E_NOTIMPL; }
-    STDMETHODIMP Pause() override { return shutdown_ ? E_UNEXPECTED : E_NOTIMPL; }
-    STDMETHODIMP Stop() override { return shutdown_ ? E_UNEXPECTED : E_NOTIMPL; }
-    STDMETHODIMP Shutdown() override { shutdown_ = true; return S_OK; }
+    STDMETHODIMP Start(IMFPresentationDescriptor*, const GUID*, const PROPVARIANT*) override { if (shutdown_) return E_UNEXPECTED; return stream_ ? stream_->RequestSample(nullptr) : E_OUTOFMEMORY; }
+    STDMETHODIMP Pause() override { return shutdown_ ? E_UNEXPECTED : S_OK; }
+    STDMETHODIMP Stop() override { if (stream_) stream_->Stop(); return shutdown_ ? E_UNEXPECTED : S_OK; }
+    STDMETHODIMP Shutdown() override { if (!shutdown_ && stream_) stream_->Stop(); shutdown_ = true; return S_OK; }
     STDMETHODIMP GetEvent(DWORD, IMFMediaEvent **v) override { if (v) *v = nullptr; return shutdown_ ? E_UNEXPECTED : E_NOTIMPL; }
     STDMETHODIMP BeginGetEvent(IMFAsyncCallback*, IUnknown*) override { return shutdown_ ? E_UNEXPECTED : E_NOTIMPL; }
     STDMETHODIMP EndGetEvent(IMFAsyncResult*, IMFMediaEvent **v) override { if (v) *v = nullptr; return E_NOTIMPL; }
