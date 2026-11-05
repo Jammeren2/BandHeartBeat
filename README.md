@@ -1,15 +1,17 @@
-# BandHeartBeat BLE heart-rate POC
+# BandHeartBeat
 
-This Windows-focused proof of concept scans for the Bluetooth SIG Heart Rate Service (`0x180D`), connects to a matching peripheral, subscribes to Heart Rate Measurement (`0x2A37`), and prints BPM notifications.
+Lightweight native Windows heart-rate monitor. Use a device broadcasting the standard Bluetooth SIG Heart Rate Service (0x180D), keep Windows Bluetooth on, then open `target/release/band-heart-beat.exe`.
 
-## Run
+The compact dark window shows real BLE heart-rate measurements. Closing or minimizing hides it in the notification area. Left-click its tray icon to show it; right-click for **Показать**, **Повторить подключение**, or **Выйти**. Retry starts a fresh scan after a failure; an active scan/connection is never duplicated. No readings for 20 seconds ends the connection and clears the value.
 
-1. On the Band 10, open **Settings > HR Data Broadcasts** and enable broadcasting. Keep Bluetooth enabled on Windows.
-2. Install Rust and the Visual Studio C++ Build Tools (MSVC linker).
-3. Run `cargo run` and wait for the scan. Stop with Ctrl+C.
+For an explicitly labeled UI preview without hardware: `band-heart-beat.exe --demo`. Demo shows a fixed example of 72 BPM and never claims a live connection. Normal mode never generates readings.
 
-If no device is found, confirm HR Data Broadcasts is enabled and that another host is not connected. The mode may disconnect the Huawei Health phone companion while active.
+If no device is found, enable standard heart-rate broadcasting on a supported device and check that another host is not connected. **Huawei Band 10 compatibility and the availability of a broadcast setting are unconfirmed.**
+
 ## Build
 
-From a Windows terminal with the Visual Studio C++ Build Tools installed, run `cargo build --release`. The executable is written to `target\\release\\band-heart-beat.exe`.
-For a standalone MinGW build when the GNU Rust toolchain is installed, use `rustup run stable-x86_64-pc-windows-gnu cargo build --release`. This produces `target\\release\\band-heart-beat.exe` without requiring Visual Studio's linker.
+Use Rust and Visual Studio C++ Build Tools: `cargo build --release`.
+With the GNU Rust toolchain and MinGW installed: `rustup run stable-x86_64-pc-windows-gnu cargo build --release --offline`.
+Both write `target/release/band-heart-beat.exe`. Run `cargo fmt --check` and `rustup run stable-x86_64-pc-windows-gnu cargo test --offline` for local checks.
+
+No Huawei hardware was available for validation. This version provides the native monitor and tray; OBS/video output is not implemented.
