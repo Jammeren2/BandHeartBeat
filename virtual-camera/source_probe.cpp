@@ -8,7 +8,19 @@ int main() {
     if (FAILED(StringFromCLSID(CLSID_BandHeartBeatSource, &value))) return 2;
     std::wcout << L"Source CLSID: " << value << L"\n";
     CoTaskMemFree(value);
-    std::cout << "Current-user registration helper: not implemented (safe prototype).\n";
-    std::cout << "No MFCreateVirtualCamera call; no camera registration or activation performed.\n";
-    return 0;
+    HMODULE dll = LoadLibraryW(L"BandHeartBeatSource.dll");
+    if (!dll) { std::cout << "LoadLibrary failed (run from virtual-camera/out).\n"; return 3; }
+    using CreateFn = HRESULT (__stdcall *)(IMFMediaSource **);
+    auto create = reinterpret_cast<CreateFn>(GetProcAddress(dll, "CreatePlaceholderSource"));
+    IMFMediaSource *source = nullptr;
+    HRESULT hr = create ? create(&source) : E_POINTER;
+    std::cout << "CreatePlaceholderSource HRESULT: 0x" << std::hex << hr << std::dec << "\n";
+    if (SUCCEEDED(hr)) {
+        DWORD characteristics = 0; std::cout << "GetCharacteristics HRESULT: 0x" << std::hex << source->GetCharacteristics(&characteristics) << std::dec << "\n";
+        std::cout << "Shutdown HRESULT: 0x" << std::hex << source->Shutdown() << std::dec << "\n";
+        source->Release();
+    }
+    FreeLibrary(dll);
+    std::cout << "No MFCreateVirtualCamera call; no registration, camera activation, or telemetry performed.\n";
+    return SUCCEEDED(hr) ? 0 : 4;
 }
