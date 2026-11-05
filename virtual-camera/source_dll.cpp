@@ -30,15 +30,15 @@ public:
 };
 extern "C" __declspec(dllexport) HRESULT __stdcall CreatePlaceholderStream(IMFMediaStream **o){if(!o)return E_POINTER;*o=new(std::nothrow)PlaceholderStream();return *o?S_OK:E_OUTOFMEMORY;}
 
-class PlaceholderSource final : public IMFMediaSource {
+class PlaceholderSource final : public IMFMediaSourceEx {
     volatile long refs_ = 1; bool shutdown_ = false; PlaceholderStream *stream_ = nullptr; IMFMediaEventQueue *queue_ = nullptr;
 public:
     PlaceholderSource() : stream_(new(std::nothrow) PlaceholderStream()) { MFCreateEventQueue(&queue_); }
     ~PlaceholderSource() { if (stream_) stream_->Release(); if(queue_) queue_->Shutdown(); }
     STDMETHODIMP QueryInterface(REFIID riid, void **out) override {
         if (!out) return E_POINTER; *out = nullptr;
-        if (riid == IID_IUnknown || riid == __uuidof(IMFMediaSource) || riid == __uuidof(IMFMediaEventGenerator)) {
-            *out = static_cast<IMFMediaSource*>(this); AddRef(); return S_OK;
+        if (riid == IID_IUnknown || riid == __uuidof(IMFMediaSource) || riid == __uuidof(IMFMediaSourceEx) || riid == __uuidof(IMFMediaEventGenerator)) {
+            *out = static_cast<IMFMediaSourceEx*>(this); AddRef(); return S_OK;
         }
         return E_NOINTERFACE;
     }
@@ -70,6 +70,9 @@ public:
     STDMETHODIMP BeginGetEvent(IMFAsyncCallback*c, IUnknown*s) override { return queue_?queue_->BeginGetEvent(c,s):E_UNEXPECTED; }
     STDMETHODIMP EndGetEvent(IMFAsyncResult*r, IMFMediaEvent **v) override { return queue_?queue_->EndGetEvent(r,v):E_UNEXPECTED; }
     STDMETHODIMP QueueEvent(MediaEventType t, REFGUID g, HRESULT h, const PROPVARIANT*v) override { return queue_?queue_->QueueEventParamVar(t,g,h,v):E_UNEXPECTED; }
+    STDMETHODIMP GetSourceAttributes(IMFAttributes **a) override { if(!a)return E_POINTER; *a=nullptr; return MFCreateAttributes(a,4); }
+    STDMETHODIMP GetStreamAttributes(DWORD, IMFAttributes **a) override { if(!a)return E_POINTER; *a=nullptr; return MFCreateAttributes(a,4); }
+    STDMETHODIMP SetD3DManager(IUnknown*) override { return S_OK; }
 };
 
 extern "C" __declspec(dllexport) HRESULT __stdcall CreatePlaceholderSource(IMFMediaSource **out) {
