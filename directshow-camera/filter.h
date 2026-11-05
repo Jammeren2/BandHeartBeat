@@ -2,27 +2,93 @@
 #include <dshow.h>
 #include <new>
 #include <cstring>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
+#include <ks.h>
+#include <ksmedia.h>
+#include "shared_frame.h"
+inline std::atomic<long> live_objects{0};
+inline std::atomic<long> server_locks{0};
 extern const CLSID CLSID_BandHeartBeatDirectShow;
 inline HRESULT VideoType(AM_MEDIA_TYPE* t) {
  if(!t)return E_POINTER; ZeroMemory(t,sizeof(*t)); t->majortype=MEDIATYPE_Video;t->subtype=MEDIASUBTYPE_RGB32;t->formattype=FORMAT_VideoInfo;t->bFixedSizeSamples=TRUE;t->lSampleSize=640*480*4;t->cbFormat=sizeof(VIDEOINFOHEADER);
  t->pbFormat=static_cast<BYTE*>(CoTaskMemAlloc(t->cbFormat));if(!t->pbFormat)return E_OUTOFMEMORY;ZeroMemory(t->pbFormat,t->cbFormat);auto v=reinterpret_cast<VIDEOINFOHEADER*>(t->pbFormat);v->AvgTimePerFrame=2000000;v->bmiHeader.biSize=sizeof(BITMAPINFOHEADER);v->bmiHeader.biWidth=640;v->bmiHeader.biHeight=480;v->bmiHeader.biPlanes=1;v->bmiHeader.biBitCount=32;v->bmiHeader.biCompression=BI_RGB;v->bmiHeader.biSizeImage=t->lSampleSize;return S_OK;
 }
-class Types final:public IEnumMediaTypes { LONG refs=1;ULONG index=0;public:
+inline bool ValidType(const AM_MEDIA_TYPE*t){if(!t||t->majortype!=MEDIATYPE_Video||t->subtype!=MEDIASUBTYPE_RGB32||t->formattype!=FORMAT_VideoInfo||!t->pbFormat||t->cbFormat<sizeof(VIDEOINFOHEADER))return false;auto v=reinterpret_cast<const VIDEOINFOHEADER*>(t->pbFormat);return v->bmiHeader.biWidth==640&&v->bmiHeader.biHeight==480&&v->bmiHeader.biBitCount==32&&v->bmiHeader.biCompression==BI_RGB&&v->AvgTimePerFrame==2000000;}
+class Types final:public IEnumMediaTypes { LONG refs=1;ULONG index=0;public:Types(){++live_objects;}~Types(){--live_objects;}
  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID r,void**o)override{if(!o)return E_POINTER;*o=nullptr;if(r!=IID_IUnknown&&r!=IID_IEnumMediaTypes)return E_NOINTERFACE;*o=static_cast<IEnumMediaTypes*>(this);AddRef();return S_OK;}
  ULONG STDMETHODCALLTYPE AddRef()override{return InterlockedIncrement(&refs);}ULONG STDMETHODCALLTYPE Release()override{auto n=InterlockedDecrement(&refs);if(!n)delete this;return n;}
  HRESULT STDMETHODCALLTYPE Next(ULONG n,AM_MEDIA_TYPE**t,ULONG*f)override{if(!t||(!f&&n!=1))return E_POINTER;if(f)*f=0;if(!n)return S_OK;if(index)return S_FALSE;*t=static_cast<AM_MEDIA_TYPE*>(CoTaskMemAlloc(sizeof(AM_MEDIA_TYPE)));if(!*t)return E_OUTOFMEMORY;auto hr=VideoType(*t);if(FAILED(hr)){CoTaskMemFree(*t);*t=nullptr;return hr;}index=1;if(f)*f=1;return n==1?S_OK:S_FALSE;}
  HRESULT STDMETHODCALLTYPE Skip(ULONG n)override{if(n==0)return S_OK;if(index)return S_FALSE;index=1;return n==1?S_OK:S_FALSE;}HRESULT STDMETHODCALLTYPE Reset()override{index=0;return S_OK;}HRESULT STDMETHODCALLTYPE Clone(IEnumMediaTypes**o)override{if(!o)return E_POINTER;auto p=new(std::nothrow)Types();if(!p)return E_OUTOFMEMORY;p->index=index;*o=p;return S_OK;}
 };
 class Filter;
-class Pin final:public IPin { Filter* owner;public:explicit Pin(Filter*f):owner(f){}HRESULT STDMETHODCALLTYPE QueryInterface(REFIID,void**)override;ULONG STDMETHODCALLTYPE AddRef()override;ULONG STDMETHODCALLTYPE Release()override;
- HRESULT STDMETHODCALLTYPE Connect(IPin*,const AM_MEDIA_TYPE*)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE ReceiveConnection(IPin*,const AM_MEDIA_TYPE*)override{return VFW_E_INVALID_DIRECTION;}HRESULT STDMETHODCALLTYPE Disconnect()override{return S_FALSE;}HRESULT STDMETHODCALLTYPE ConnectedTo(IPin**o)override{if(!o)return E_POINTER;*o=nullptr;return VFW_E_NOT_CONNECTED;}HRESULT STDMETHODCALLTYPE ConnectionMediaType(AM_MEDIA_TYPE*)override{return VFW_E_NOT_CONNECTED;}
+class Pin final:public IPin, public IAMStreamConfig, public IKsPropertySet { Filter* owner; IPin* peer=nullptr; IMemInputPin* input=nullptr; IMemAllocator* allocator=nullptr; std::thread worker; std::recursive_mutex control; std::mutex mutex; std::condition_variable wake; bool quitting=false,running=false; public:explicit Pin(Filter*f):owner(f){}HRESULT STDMETHODCALLTYPE QueryInterface(REFIID,void**)override;ULONG STDMETHODCALLTYPE AddRef()override;ULONG STDMETHODCALLTYPE Release()override;
+ HRESULT STDMETHODCALLTYPE Connect(IPin*,const AM_MEDIA_TYPE*)override; void StartDelivery(); void StopDelivery(); void PauseDelivery(); ~Pin(){StopDelivery(); Disconnect();}HRESULT STDMETHODCALLTYPE ReceiveConnection(IPin*,const AM_MEDIA_TYPE*)override{return VFW_E_INVALID_DIRECTION;}HRESULT STDMETHODCALLTYPE Disconnect()override;HRESULT STDMETHODCALLTYPE ConnectedTo(IPin**o)override{if(!o)return E_POINTER;std::lock_guard<std::mutex>l(mutex);*o=peer;if(peer)peer->AddRef();return peer?S_OK:VFW_E_NOT_CONNECTED;}HRESULT STDMETHODCALLTYPE ConnectionMediaType(AM_MEDIA_TYPE*t)override{std::lock_guard<std::mutex>l(mutex);return peer?VideoType(t):VFW_E_NOT_CONNECTED;}
+
+ HRESULT STDMETHODCALLTYPE SetFormat(AM_MEDIA_TYPE*t)override;
+ HRESULT STDMETHODCALLTYPE GetFormat(AM_MEDIA_TYPE**t)override{if(!t)return E_POINTER;*t=static_cast<AM_MEDIA_TYPE*>(CoTaskMemAlloc(sizeof(AM_MEDIA_TYPE)));return *t?VideoType(*t):E_OUTOFMEMORY;}
+ HRESULT STDMETHODCALLTYPE GetNumberOfCapabilities(int*n,int*z)override{if(!n||!z)return E_POINTER;*n=1;*z=sizeof(VIDEO_STREAM_CONFIG_CAPS);return S_OK;}
+ HRESULT STDMETHODCALLTYPE GetStreamCaps(int i,AM_MEDIA_TYPE**t,BYTE*c)override{if(i!=0)return S_FALSE;if(!c)return E_POINTER;auto hr=GetFormat(t);if(FAILED(hr))return hr;auto v=reinterpret_cast<VIDEO_STREAM_CONFIG_CAPS*>(c);ZeroMemory(v,sizeof(*v));v->guid=FORMAT_VideoInfo;v->InputSize={640,480};v->MinOutputSize=v->MaxOutputSize=v->InputSize;v->MinFrameInterval=v->MaxFrameInterval=2000000;v->MinBitsPerSecond=v->MaxBitsPerSecond=640*480*32*5;return S_OK;}
+ HRESULT STDMETHODCALLTYPE Set(REFGUID,DWORD,LPVOID,DWORD,LPVOID,DWORD)override{return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE Get(REFGUID g,DWORD id,LPVOID,DWORD,LPVOID data,DWORD size,DWORD*ret)override{if(g!=AMPROPSETID_Pin||id!=AMPROPERTY_PIN_CATEGORY)return E_PROP_ID_UNSUPPORTED;if(ret)*ret=sizeof(GUID);if(!data)return S_OK;if(size<sizeof(GUID))return E_UNEXPECTED;*static_cast<GUID*>(data)=PIN_CATEGORY_CAPTURE;return S_OK;}
+ HRESULT STDMETHODCALLTYPE QuerySupported(REFGUID g,DWORD id,DWORD*o)override{if(!o)return E_POINTER;*o=0;if(g!=AMPROPSETID_Pin||id!=AMPROPERTY_PIN_CATEGORY)return E_PROP_ID_UNSUPPORTED;*o=KSPROPERTY_SUPPORT_GET;return S_OK;}
  HRESULT STDMETHODCALLTYPE QueryPinInfo(PIN_INFO*)override;HRESULT STDMETHODCALLTYPE QueryDirection(PIN_DIRECTION*d)override{if(!d)return E_POINTER;*d=PINDIR_OUTPUT;return S_OK;}HRESULT STDMETHODCALLTYPE QueryId(LPWSTR*o)override{if(!o)return E_POINTER;*o=static_cast<LPWSTR>(CoTaskMemAlloc(14));if(!*o)return E_OUTOFMEMORY;wcscpy_s(*o,7,L"Output");return S_OK;}
- HRESULT STDMETHODCALLTYPE QueryAccept(const AM_MEDIA_TYPE*t)override{return t&&t->majortype==MEDIATYPE_Video&&t->subtype==MEDIASUBTYPE_RGB32?S_OK:S_FALSE;}HRESULT STDMETHODCALLTYPE EnumMediaTypes(IEnumMediaTypes**o)override{if(!o)return E_POINTER;*o=new(std::nothrow)Types();return *o?S_OK:E_OUTOFMEMORY;}HRESULT STDMETHODCALLTYPE QueryInternalConnections(IPin**,ULONG*)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE EndOfStream()override{return E_UNEXPECTED;}HRESULT STDMETHODCALLTYPE BeginFlush()override{return S_OK;}HRESULT STDMETHODCALLTYPE EndFlush()override{return S_OK;}HRESULT STDMETHODCALLTYPE NewSegment(REFERENCE_TIME,REFERENCE_TIME,double)override{return S_OK;}
+ HRESULT STDMETHODCALLTYPE QueryAccept(const AM_MEDIA_TYPE*t)override{return ValidType(t)?S_OK:S_FALSE;}HRESULT STDMETHODCALLTYPE EnumMediaTypes(IEnumMediaTypes**o)override{if(!o)return E_POINTER;*o=new(std::nothrow)Types();return *o?S_OK:E_OUTOFMEMORY;}HRESULT STDMETHODCALLTYPE QueryInternalConnections(IPin**,ULONG*)override{return E_NOTIMPL;}HRESULT STDMETHODCALLTYPE EndOfStream()override{return E_UNEXPECTED;}HRESULT STDMETHODCALLTYPE BeginFlush()override{return S_OK;}HRESULT STDMETHODCALLTYPE EndFlush()override{return S_OK;}HRESULT STDMETHODCALLTYPE NewSegment(REFERENCE_TIME,REFERENCE_TIME,double)override{return S_OK;}
 };
-class Pins final:public IEnumPins { LONG refs=1;IPin*pin;ULONG index=0;public:explicit Pins(IPin*p):pin(p){pin->AddRef();}~Pins(){pin->Release();}HRESULT STDMETHODCALLTYPE QueryInterface(REFIID r,void**o)override{if(!o)return E_POINTER;*o=nullptr;if(r!=IID_IUnknown&&r!=IID_IEnumPins)return E_NOINTERFACE;*o=static_cast<IEnumPins*>(this);AddRef();return S_OK;}ULONG STDMETHODCALLTYPE AddRef()override{return InterlockedIncrement(&refs);}ULONG STDMETHODCALLTYPE Release()override{auto n=InterlockedDecrement(&refs);if(!n)delete this;return n;}HRESULT STDMETHODCALLTYPE Next(ULONG n,IPin**o,ULONG*f)override{if(!o||(!f&&n!=1))return E_POINTER;if(f)*f=0;if(!n)return S_OK;if(index)return S_FALSE;*o=pin;pin->AddRef();index=1;if(f)*f=1;return n==1?S_OK:S_FALSE;}HRESULT STDMETHODCALLTYPE Skip(ULONG n)override{if(!n)return S_OK;if(index)return S_FALSE;index=1;return n==1?S_OK:S_FALSE;}HRESULT STDMETHODCALLTYPE Reset()override{index=0;return S_OK;}HRESULT STDMETHODCALLTYPE Clone(IEnumPins**o)override{if(!o)return E_POINTER;auto p=new(std::nothrow)Pins(pin);if(!p)return E_OUTOFMEMORY;p->index=index;*o=p;return S_OK;}
+class Pins final:public IEnumPins { LONG refs=1;IPin*pin;ULONG index=0;public:explicit Pins(IPin*p):pin(p){++live_objects;pin->AddRef();}~Pins(){pin->Release();--live_objects;}HRESULT STDMETHODCALLTYPE QueryInterface(REFIID r,void**o)override{if(!o)return E_POINTER;*o=nullptr;if(r!=IID_IUnknown&&r!=IID_IEnumPins)return E_NOINTERFACE;*o=static_cast<IEnumPins*>(this);AddRef();return S_OK;}ULONG STDMETHODCALLTYPE AddRef()override{return InterlockedIncrement(&refs);}ULONG STDMETHODCALLTYPE Release()override{auto n=InterlockedDecrement(&refs);if(!n)delete this;return n;}HRESULT STDMETHODCALLTYPE Next(ULONG n,IPin**o,ULONG*f)override{if(!o||(!f&&n!=1))return E_POINTER;if(f)*f=0;if(!n)return S_OK;if(index)return S_FALSE;*o=pin;pin->AddRef();index=1;if(f)*f=1;return n==1?S_OK:S_FALSE;}HRESULT STDMETHODCALLTYPE Skip(ULONG n)override{if(!n)return S_OK;if(index)return S_FALSE;index=1;return n==1?S_OK:S_FALSE;}HRESULT STDMETHODCALLTYPE Reset()override{index=0;return S_OK;}HRESULT STDMETHODCALLTYPE Clone(IEnumPins**o)override{if(!o)return E_POINTER;auto p=new(std::nothrow)Pins(pin);if(!p)return E_OUTOFMEMORY;p->index=index;*o=p;return S_OK;}
 };
-class Filter final:public IBaseFilter { LONG refs=1;FILTER_STATE state=State_Stopped;IReferenceClock*clock=nullptr;IFilterGraph*graph=nullptr;public:Pin pin;Filter():pin(this){}~Filter(){if(clock)clock->Release();}
+class Filter final:public IBaseFilter { LONG refs=1;std::atomic<FILTER_STATE> state{State_Stopped};IReferenceClock*clock=nullptr;IFilterGraph*graph=nullptr;public:Pin pin;Filter():pin(this){++live_objects;}~Filter(){pin.StopDelivery();if(clock)clock->Release();--live_objects;}
  HRESULT STDMETHODCALLTYPE QueryInterface(REFIID r,void**o)override{if(!o)return E_POINTER;*o=nullptr;if(r!=IID_IUnknown&&r!=IID_IPersist&&r!=IID_IMediaFilter&&r!=IID_IBaseFilter)return E_NOINTERFACE;*o=static_cast<IBaseFilter*>(this);AddRef();return S_OK;}ULONG STDMETHODCALLTYPE AddRef()override{return InterlockedIncrement(&refs);}ULONG STDMETHODCALLTYPE Release()override{auto n=InterlockedDecrement(&refs);if(!n)delete this;return n;}
- HRESULT STDMETHODCALLTYPE GetClassID(CLSID*c)override{if(!c)return E_POINTER;*c=CLSID_BandHeartBeatDirectShow;return S_OK;}HRESULT STDMETHODCALLTYPE Stop()override{state=State_Stopped;return S_OK;}HRESULT STDMETHODCALLTYPE Pause()override{state=State_Paused;return S_OK;}HRESULT STDMETHODCALLTYPE Run(REFERENCE_TIME)override{state=State_Running;return S_OK;}HRESULT STDMETHODCALLTYPE GetState(DWORD,FILTER_STATE*s)override{if(!s)return E_POINTER;*s=state;return S_OK;}HRESULT STDMETHODCALLTYPE SetSyncSource(IReferenceClock*c)override{if(c)c->AddRef();if(clock)clock->Release();clock=c;return S_OK;}HRESULT STDMETHODCALLTYPE GetSyncSource(IReferenceClock**c)override{if(!c)return E_POINTER;*c=clock;if(clock)clock->AddRef();return S_OK;}HRESULT STDMETHODCALLTYPE EnumPins(IEnumPins**o)override{if(!o)return E_POINTER;*o=new(std::nothrow)Pins(&pin);return *o?S_OK:E_OUTOFMEMORY;}HRESULT STDMETHODCALLTYPE FindPin(LPCWSTR id,IPin**o)override{if(!o||!id)return E_POINTER;*o=nullptr;if(wcscmp(id,L"Output"))return VFW_E_NOT_FOUND;*o=&pin;pin.AddRef();return S_OK;}HRESULT STDMETHODCALLTYPE QueryFilterInfo(FILTER_INFO*i)override{if(!i)return E_POINTER;ZeroMemory(i,sizeof(*i));wcscpy_s(i->achName,L"BandHeartBeat Placeholder");i->pGraph=graph;if(graph)graph->AddRef();return S_OK;}HRESULT STDMETHODCALLTYPE JoinFilterGraph(IFilterGraph*g,LPCWSTR)override{graph=g;return S_OK;}HRESULT STDMETHODCALLTYPE QueryVendorInfo(LPWSTR*o)override{if(o)*o=nullptr;return E_NOTIMPL;}
+ HRESULT STDMETHODCALLTYPE GetClassID(CLSID*c)override{if(!c)return E_POINTER;*c=CLSID_BandHeartBeatDirectShow;return S_OK;}HRESULT STDMETHODCALLTYPE Stop()override{pin.StopDelivery();state=State_Stopped;return S_OK;}HRESULT STDMETHODCALLTYPE Pause()override{pin.PauseDelivery();state=State_Paused;return S_OK;}HRESULT STDMETHODCALLTYPE Run(REFERENCE_TIME)override{pin.StartDelivery();state=State_Running;return S_OK;}HRESULT STDMETHODCALLTYPE GetState(DWORD,FILTER_STATE*s)override{if(!s)return E_POINTER;*s=state;return S_OK;}HRESULT STDMETHODCALLTYPE SetSyncSource(IReferenceClock*c)override{if(c)c->AddRef();if(clock)clock->Release();clock=c;return S_OK;}HRESULT STDMETHODCALLTYPE GetSyncSource(IReferenceClock**c)override{if(!c)return E_POINTER;*c=clock;if(clock)clock->AddRef();return S_OK;}HRESULT STDMETHODCALLTYPE EnumPins(IEnumPins**o)override{if(!o)return E_POINTER;*o=new(std::nothrow)Pins(&pin);return *o?S_OK:E_OUTOFMEMORY;}HRESULT STDMETHODCALLTYPE FindPin(LPCWSTR id,IPin**o)override{if(!o||!id)return E_POINTER;*o=nullptr;if(wcscmp(id,L"Output"))return VFW_E_NOT_FOUND;*o=&pin;pin.AddRef();return S_OK;}HRESULT STDMETHODCALLTYPE QueryFilterInfo(FILTER_INFO*i)override{if(!i)return E_POINTER;ZeroMemory(i,sizeof(*i));wcscpy_s(i->achName,L"BandHeartBeat Placeholder");i->pGraph=graph;if(graph)graph->AddRef();return S_OK;}HRESULT STDMETHODCALLTYPE JoinFilterGraph(IFilterGraph*g,LPCWSTR)override{graph=g;return S_OK;}HRESULT STDMETHODCALLTYPE QueryVendorInfo(LPWSTR*o)override{if(o)*o=nullptr;return E_NOTIMPL;}
 };
-inline HRESULT Pin::QueryInterface(REFIID r,void**o){if(!o)return E_POINTER;*o=nullptr;if(r!=IID_IUnknown&&r!=IID_IPin)return E_NOINTERFACE;*o=static_cast<IPin*>(this);AddRef();return S_OK;}inline ULONG Pin::AddRef(){return owner->AddRef();}inline ULONG Pin::Release(){return owner->Release();}inline HRESULT Pin::QueryPinInfo(PIN_INFO*i){if(!i)return E_POINTER;ZeroMemory(i,sizeof(*i));i->pFilter=owner;owner->AddRef();i->dir=PINDIR_OUTPUT;wcscpy_s(i->achName,L"Output");return S_OK;}
+inline HRESULT Pin::QueryInterface(REFIID r,void**o){if(!o)return E_POINTER;*o=nullptr;if(r==IID_IAMStreamConfig)*o=static_cast<IAMStreamConfig*>(this);else if(r==__uuidof(IKsPropertySet))*o=static_cast<IKsPropertySet*>(this);else if(r==IID_IUnknown||r==IID_IPin)*o=static_cast<IPin*>(this);else return E_NOINTERFACE;AddRef();return S_OK;}inline ULONG Pin::AddRef(){return owner->AddRef();}inline ULONG Pin::Release(){return owner->Release();}inline HRESULT Pin::QueryPinInfo(PIN_INFO*i){if(!i)return E_POINTER;ZeroMemory(i,sizeof(*i));i->pFilter=owner;owner->AddRef();i->dir=PINDIR_OUTPUT;wcscpy_s(i->achName,L"Output");return S_OK;}
+
+inline HRESULT Pin::SetFormat(AM_MEDIA_TYPE*t){std::lock_guard<std::mutex>l(mutex);return peer?VFW_E_ALREADY_CONNECTED:(ValidType(t)?S_OK:VFW_E_TYPE_NOT_ACCEPTED);}
+inline HRESULT Pin::Connect(IPin*p,const AM_MEDIA_TYPE*t){
+ if(!p)return E_POINTER;std::lock_guard<std::mutex>l(mutex);if(peer)return VFW_E_ALREADY_CONNECTED;
+ AM_MEDIA_TYPE mt{};auto hr=VideoType(&mt);if(FAILED(hr))return hr;if(t&&!ValidType(t)){CoTaskMemFree(mt.pbFormat);return VFW_E_TYPE_NOT_ACCEPTED;}
+ IMemInputPin*in=nullptr;IMemAllocator*a=nullptr;hr=p->QueryInterface(IID_IMemInputPin,(void**)&in);
+ if(SUCCEEDED(hr))hr=p->ReceiveConnection(this,&mt);
+ if(SUCCEEDED(hr)){hr=in->GetAllocator(&a);if(FAILED(hr))hr=CoCreateInstance(CLSID_MemoryAllocator,nullptr,CLSCTX_INPROC_SERVER,IID_IMemAllocator,(void**)&a);}
+ ALLOCATOR_PROPERTIES request{2,640*480*4,1,0},actual{};
+ if(SUCCEEDED(hr))hr=a->SetProperties(&request,&actual);
+ if(SUCCEEDED(hr)&&(actual.cbBuffer<request.cbBuffer||actual.cBuffers<1))hr=E_FAIL;
+ if(SUCCEEDED(hr))hr=in->NotifyAllocator(a,FALSE);
+ if(SUCCEEDED(hr)){peer=p;p->AddRef();input=in;allocator=a;}else{if(a)a->Release();if(in)in->Release();p->Disconnect();}
+ CoTaskMemFree(mt.pbFormat);return hr;
+}
+inline HRESULT Pin::Disconnect(){StopDelivery();std::lock_guard<std::mutex>l(mutex);if(!peer)return S_FALSE;peer->Release();peer=nullptr;input->Release();input=nullptr;allocator->Release();allocator=nullptr;return S_OK;}
+inline void Pin::PauseDelivery(){std::lock_guard<std::recursive_mutex>guard(control);std::lock_guard<std::mutex>l(mutex);running=false;wake.notify_all();}
+inline void Pin::StopDelivery(){
+ std::lock_guard<std::recursive_mutex>guard(control);
+ {std::lock_guard<std::mutex>l(mutex);quitting=true;running=false;wake.notify_all();if(peer)peer->BeginFlush();if(allocator)allocator->Decommit();}
+ if(worker.joinable())worker.join();
+ {std::lock_guard<std::mutex>l(mutex);if(peer)peer->EndFlush();}
+}
+inline void Pin::StartDelivery(){
+ std::lock_guard<std::recursive_mutex>guard(control);
+ std::lock_guard<std::mutex>l(mutex);if(!peer)return;if(worker.joinable()){running=true;wake.notify_all();return;}
+ if(FAILED(allocator->Commit()))return;quitting=false;running=true;
+ worker=std::thread([this]{
+  CoInitializeEx(nullptr,COINIT_MULTITHREADED);REFERENCE_TIME time=0;bool first=true;
+  while(true){
+   {std::unique_lock<std::mutex>l(mutex);wake.wait(l,[this]{return quitting||running;});if(quitting)break;}
+   IMediaSample*s=nullptr;HRESULT hr=allocator->GetBuffer(&s,nullptr,nullptr,0);if(FAILED(hr))break;
+   BYTE*p=nullptr;hr=s->GetPointer(&p);
+   if(SUCCEEDED(hr)){
+    for(int y=0;y<480;y++)for(int x=0;x<640;x++){int i=(y*640+x)*4;bool mark=(x/40+y/40)%2;p[i]=mark?0x73:0x20;p[i+1]=mark?0x8b:0x20;p[i+2]=mark?0xff:0x20;p[i+3]=0xff;}
+    // Fixed-size, versioned latest-frame IPC; mutex protects publication/copy.
+    HANDLE map=OpenFileMappingW(FILE_MAP_READ,FALSE,BH_SHM_NAME);
+    if(map){auto view=static_cast<const BYTE*>(MapViewOfFile(map,FILE_MAP_READ,0,0,sizeof(BhFrameHeader)+640*480*4));HANDLE gate=OpenMutexW(SYNCHRONIZE|MUTEX_MODIFY_STATE,FALSE,L"Local\\BandHeartBeatFrameMutex");
+     DWORD waited=(view&&gate)?WaitForSingleObject(gate,0):WAIT_TIMEOUT; if(waited==WAIT_OBJECT_0){auto h=reinterpret_cast<const BhFrameHeader*>(view);if(h->magic==0x42484247&&h->version==1&&h->width==640&&h->height==480&&h->stride==2560&&h->bytes==640*480*4)memcpy(p,view+sizeof(BhFrameHeader),h->bytes);ReleaseMutex(gate);}else if(waited==WAIT_ABANDONED){ReleaseMutex(gate);}
+     if(gate)CloseHandle(gate);if(view)UnmapViewOfFile(view);CloseHandle(map);}
+    REFERENCE_TIME end=time+2000000;s->SetTime(&time,&end);s->SetActualDataLength(640*480*4);s->SetSyncPoint(TRUE);s->SetDiscontinuity(first);first=false;time=end;hr=input->Receive(s);
+   }
+   s->Release();if(FAILED(hr))break;
+   std::unique_lock<std::mutex>l(mutex);if(wake.wait_for(l,std::chrono::milliseconds(200),[this]{return quitting||!running;})&&quitting)break;
+  }
+  CoUninitialize();
+ });
+}
