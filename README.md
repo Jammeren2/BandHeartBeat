@@ -9,3 +9,6 @@ This Windows-focused proof of concept scans for the Bluetooth SIG Heart Rate Ser
 3. Run `cargo run` and wait for the scan. Stop with Ctrl+C.
 
 If no device is found, confirm HR Data Broadcasts is enabled and that another host is not connected. The mode may disconnect the Huawei Health phone companion while active.
+## Build
+
+From a Windows terminal with the Visual Studio C++ Build Tools installed, run `cargo build --release`. The executable is written to `target\\release\\band-heart-beat.exe`.
