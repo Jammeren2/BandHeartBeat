@@ -3,15 +3,17 @@
 #include <new>
 
 class PlaceholderStream final : public IMFMediaStream {
-    volatile long refs_ = 1; LONGLONG next_time_ = 0; bool stopped_ = false;
+    volatile long refs_ = 1; LONGLONG next_time_ = 0; bool stopped_ = false; IMFMediaEventQueue *queue_ = nullptr;
 public:
+    PlaceholderStream() { MFCreateEventQueue(&queue_); }
+    ~PlaceholderStream(){ if(queue_) queue_->Shutdown(); }
     STDMETHODIMP QueryInterface(REFIID r, void **o) override { if(!o)return E_POINTER;*o=nullptr; if(r==IID_IUnknown||r==__uuidof(IMFMediaStream)||r==__uuidof(IMFMediaEventGenerator)){*o=static_cast<IMFMediaStream*>(this);AddRef();return S_OK;} return E_NOINTERFACE; }
     STDMETHODIMP_(ULONG) AddRef() override { return InterlockedIncrement(&refs_); }
     STDMETHODIMP_(ULONG) Release() override { ULONG n=InterlockedDecrement(&refs_);if(!n)delete this;return n; }
-    STDMETHODIMP GetEvent(DWORD,IMFMediaEvent **o) override {if(o)*o=nullptr;return E_NOTIMPL;}
-    STDMETHODIMP BeginGetEvent(IMFAsyncCallback*,IUnknown*) override{return E_NOTIMPL;}
-    STDMETHODIMP EndGetEvent(IMFAsyncResult*,IMFMediaEvent **o) override{if(o)*o=nullptr;return E_NOTIMPL;}
-    STDMETHODIMP QueueEvent(MediaEventType,REFGUID,HRESULT,const PROPVARIANT*) override{return E_NOTIMPL;}
+    STDMETHODIMP GetEvent(DWORD f,IMFMediaEvent **o) override{return queue_?queue_->GetEvent(f,o):E_UNEXPECTED;}
+    STDMETHODIMP BeginGetEvent(IMFAsyncCallback*c,IUnknown*s) override{return queue_?queue_->BeginGetEvent(c,s):E_UNEXPECTED;}
+    STDMETHODIMP EndGetEvent(IMFAsyncResult*r,IMFMediaEvent **o) override{return queue_?queue_->EndGetEvent(r,o):E_UNEXPECTED;}
+    STDMETHODIMP QueueEvent(MediaEventType t,REFGUID g,HRESULT h,const PROPVARIANT*v) override{return queue_?queue_->QueueEventParamVar(t,g,h,v):E_UNEXPECTED;}
     STDMETHODIMP GetMediaSource(IMFMediaSource **o) override{if(o)*o=nullptr;return E_NOTIMPL;}
     STDMETHODIMP GetStreamDescriptor(IMFStreamDescriptor **o) override{if(o)*o=nullptr;return E_NOTIMPL;}
     STDMETHODIMP RequestSample(IUnknown*) override {
@@ -19,17 +21,19 @@ public:
         HRESULT hr=MFCreateMemoryBuffer(320*240*4,&buffer); if(FAILED(hr))return hr; BYTE *p=nullptr;DWORD max=0,cur=0;
         hr=buffer->Lock(&p,&max,&cur); if(SUCCEEDED(hr)){for(DWORD i=0;i<max;i+=4){p[i]=0x73;p[i+1]=0x8b;p[i+2]=0xff;p[i+3]=0xff;} buffer->Unlock();hr=MFCreateSample(&sample);}
         if(SUCCEEDED(hr))hr=sample->AddBuffer(buffer); if(SUCCEEDED(hr))hr=sample->SetSampleTime(next_time_); if(SUCCEEDED(hr))hr=sample->SetSampleDuration(200000);
+        if(SUCCEEDED(hr)&&queue_)hr=queue_->QueueEventParamUnk(MEMediaSample,GUID_NULL,S_OK,sample);
         if(sample)sample->Release();buffer->Release();next_time_+=200000;return hr;
     }
-    void Stop(){stopped_=true;}
+    void Stop(){stopped_=true;if(queue_)queue_->QueueEventParamVar(MEStreamStopped,GUID_NULL,S_OK,nullptr);}
+    void Start(){stopped_=false;if(queue_)queue_->QueueEventParamVar(MEStreamStarted,GUID_NULL,S_OK,nullptr);}
 };
 extern "C" __declspec(dllexport) HRESULT __stdcall CreatePlaceholderStream(IMFMediaStream **o){if(!o)return E_POINTER;*o=new(std::nothrow)PlaceholderStream();return *o?S_OK:E_OUTOFMEMORY;}
 
 class PlaceholderSource final : public IMFMediaSource {
-    volatile long refs_ = 1; bool shutdown_ = false; PlaceholderStream *stream_ = nullptr;
+    volatile long refs_ = 1; bool shutdown_ = false; PlaceholderStream *stream_ = nullptr; IMFMediaEventQueue *queue_ = nullptr;
 public:
-    PlaceholderSource() : stream_(new(std::nothrow) PlaceholderStream()) {}
-    ~PlaceholderSource() { if (stream_) stream_->Release(); }
+    PlaceholderSource() : stream_(new(std::nothrow) PlaceholderStream()) { MFCreateEventQueue(&queue_); }
+    ~PlaceholderSource() { if (stream_) stream_->Release(); if(queue_) queue_->Shutdown(); }
     STDMETHODIMP QueryInterface(REFIID riid, void **out) override {
         if (!out) return E_POINTER; *out = nullptr;
         if (riid == IID_IUnknown || riid == __uuidof(IMFMediaSource) || riid == __uuidof(IMFMediaEventGenerator)) {
@@ -57,14 +61,14 @@ public:
         if (SUCCEEDED(hr)) *v = pd; else pd->Release();
         return hr;
     }
-    STDMETHODIMP Start(IMFPresentationDescriptor*, const GUID*, const PROPVARIANT*) override { if (shutdown_) return E_UNEXPECTED; return stream_ ? stream_->RequestSample(nullptr) : E_OUTOFMEMORY; }
+    STDMETHODIMP Start(IMFPresentationDescriptor*, const GUID*, const PROPVARIANT*) override { if (shutdown_) return E_UNEXPECTED; if(stream_)stream_->Start(); if(queue_)queue_->QueueEventParamVar(MESourceStarted,GUID_NULL,S_OK,nullptr); return stream_ ? stream_->RequestSample(nullptr) : E_OUTOFMEMORY; }
     STDMETHODIMP Pause() override { return shutdown_ ? E_UNEXPECTED : S_OK; }
-    STDMETHODIMP Stop() override { if (stream_) stream_->Stop(); return shutdown_ ? E_UNEXPECTED : S_OK; }
-    STDMETHODIMP Shutdown() override { if (!shutdown_ && stream_) stream_->Stop(); shutdown_ = true; return S_OK; }
-    STDMETHODIMP GetEvent(DWORD, IMFMediaEvent **v) override { if (v) *v = nullptr; return shutdown_ ? E_UNEXPECTED : E_NOTIMPL; }
-    STDMETHODIMP BeginGetEvent(IMFAsyncCallback*, IUnknown*) override { return shutdown_ ? E_UNEXPECTED : E_NOTIMPL; }
-    STDMETHODIMP EndGetEvent(IMFAsyncResult*, IMFMediaEvent **v) override { if (v) *v = nullptr; return E_NOTIMPL; }
-    STDMETHODIMP QueueEvent(MediaEventType, REFGUID, HRESULT, const PROPVARIANT*) override { return shutdown_ ? E_UNEXPECTED : E_NOTIMPL; }
+    STDMETHODIMP Stop() override { if (stream_) stream_->Stop(); if(queue_)queue_->QueueEventParamVar(MESourceStopped,GUID_NULL,S_OK,nullptr); return shutdown_ ? E_UNEXPECTED : S_OK; }
+    STDMETHODIMP Shutdown() override { if (!shutdown_ && stream_) stream_->Stop(); shutdown_ = true; if(queue_)queue_->Shutdown(); return S_OK; }
+    STDMETHODIMP GetEvent(DWORD f, IMFMediaEvent **v) override { return queue_?queue_->GetEvent(f,v):E_UNEXPECTED; }
+    STDMETHODIMP BeginGetEvent(IMFAsyncCallback*c, IUnknown*s) override { return queue_?queue_->BeginGetEvent(c,s):E_UNEXPECTED; }
+    STDMETHODIMP EndGetEvent(IMFAsyncResult*r, IMFMediaEvent **v) override { return queue_?queue_->EndGetEvent(r,v):E_UNEXPECTED; }
+    STDMETHODIMP QueueEvent(MediaEventType t, REFGUID g, HRESULT h, const PROPVARIANT*v) override { return queue_?queue_->QueueEventParamVar(t,g,h,v):E_UNEXPECTED; }
 };
 
 extern "C" __declspec(dllexport) HRESULT __stdcall CreatePlaceholderSource(IMFMediaSource **out) {
