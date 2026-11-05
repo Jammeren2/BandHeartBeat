@@ -11,6 +11,12 @@ int wmain(int argc, wchar_t **argv) {
     bool activate = false, remove = false;
     for (int i=1;i<argc;i++) { activate |= wcscmp(argv[i],L"--activate")==0; remove |= wcscmp(argv[i],L"--remove")==0; }
     if (!activate && !remove) {
+        HMODULE dll = LoadLibraryW(L"BandHeartBeatSource.dll");
+        const char *exports[] = {"DllGetClassObject","DllCanUnloadNow","DllRegisterServer","DllUnregisterServer"};
+        std::wcout << L"Export check: ";
+        bool all = dll != nullptr; for (auto name : exports) all = all && GetProcAddress(dll, name) != nullptr;
+        std::wcout << (all ? L"PASS" : L"FAIL") << L" (DllGetClassObject/DllCanUnloadNow/DllRegisterServer/DllUnregisterServer)\n";
+        if (dll) FreeLibrary(dll);
         std::wcout << L"DRY RUN: would call MFCreateVirtualCamera(SoftwareSource, Session, CurrentUser, ...).\n"
                       L"HKCU\\Software\\Classes\\CLSID\\{8EEC4A2D-7FA2-4B6E-9A4C-246DA8B46F11}\\InprocServer32 (REG_SZ: built DLL path)\n"
                       L"  ThreadingModel (REG_SZ): Both\n"
