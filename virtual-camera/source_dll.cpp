@@ -2,6 +2,29 @@
 #include "source_contract.h"
 #include <new>
 
+class PlaceholderStream final : public IMFMediaStream {
+    volatile long refs_ = 1; LONGLONG next_time_ = 0; bool stopped_ = false;
+public:
+    STDMETHODIMP QueryInterface(REFIID r, void **o) override { if(!o)return E_POINTER;*o=nullptr; if(r==IID_IUnknown||r==__uuidof(IMFMediaStream)||r==__uuidof(IMFMediaEventGenerator)){*o=static_cast<IMFMediaStream*>(this);AddRef();return S_OK;} return E_NOINTERFACE; }
+    STDMETHODIMP_(ULONG) AddRef() override { return InterlockedIncrement(&refs_); }
+    STDMETHODIMP_(ULONG) Release() override { ULONG n=InterlockedDecrement(&refs_);if(!n)delete this;return n; }
+    STDMETHODIMP GetEvent(DWORD,IMFMediaEvent **o) override {if(o)*o=nullptr;return E_NOTIMPL;}
+    STDMETHODIMP BeginGetEvent(IMFAsyncCallback*,IUnknown*) override{return E_NOTIMPL;}
+    STDMETHODIMP EndGetEvent(IMFAsyncResult*,IMFMediaEvent **o) override{if(o)*o=nullptr;return E_NOTIMPL;}
+    STDMETHODIMP QueueEvent(MediaEventType,REFGUID,HRESULT,const PROPVARIANT*) override{return E_NOTIMPL;}
+    STDMETHODIMP GetMediaSource(IMFMediaSource **o) override{if(o)*o=nullptr;return E_NOTIMPL;}
+    STDMETHODIMP GetStreamDescriptor(IMFStreamDescriptor **o) override{if(o)*o=nullptr;return E_NOTIMPL;}
+    STDMETHODIMP RequestSample(IUnknown*) override {
+        if(stopped_)return E_UNEXPECTED; IMFSample *sample=nullptr; IMFMediaBuffer *buffer=nullptr;
+        HRESULT hr=MFCreateMemoryBuffer(320*240*4,&buffer); if(FAILED(hr))return hr; BYTE *p=nullptr;DWORD max=0,cur=0;
+        hr=buffer->Lock(&p,&max,&cur); if(SUCCEEDED(hr)){for(DWORD i=0;i<max;i+=4){p[i]=0x73;p[i+1]=0x8b;p[i+2]=0xff;p[i+3]=0xff;} buffer->Unlock();hr=MFCreateSample(&sample);}
+        if(SUCCEEDED(hr))hr=sample->AddBuffer(buffer); if(SUCCEEDED(hr))hr=sample->SetSampleTime(next_time_); if(SUCCEEDED(hr))hr=sample->SetSampleDuration(200000);
+        if(sample)sample->Release();buffer->Release();next_time_+=200000;return hr;
+    }
+    void Stop(){stopped_=true;}
+};
+extern "C" __declspec(dllexport) HRESULT __stdcall CreatePlaceholderStream(IMFMediaStream **o){if(!o)return E_POINTER;*o=new(std::nothrow)PlaceholderStream();return *o?S_OK:E_OUTOFMEMORY;}
+
 class PlaceholderSource final : public IMFMediaSource {
     volatile long refs_ = 1; bool shutdown_ = false;
 public:

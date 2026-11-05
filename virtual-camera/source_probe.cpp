@@ -22,6 +22,11 @@ int main() {
         HRESULT descriptor = source->CreatePresentationDescriptor(&pd);
         std::cout << "CreatePresentationDescriptor HRESULT: 0x" << std::hex << descriptor << std::dec << "\n";
         if (SUCCEEDED(descriptor)) pd->Release();
+        using StreamFn = HRESULT (__stdcall *)(IMFMediaStream **);
+        auto stream_create = reinterpret_cast<StreamFn>(GetProcAddress(dll, "CreatePlaceholderStream"));
+        IMFMediaStream *stream = nullptr; HRESULT sh = stream_create ? stream_create(&stream) : E_POINTER;
+        std::cout << "CreatePlaceholderStream HRESULT: 0x" << std::hex << sh << std::dec << "\n";
+        if (SUCCEEDED(sh)) { HRESULT sample = stream->RequestSample(nullptr); std::cout << "RequestSample HRESULT: 0x" << std::hex << sample << std::dec << "\n"; stream->Release(); }
         std::cout << "Shutdown HRESULT: 0x" << std::hex << source->Shutdown() << std::dec << "\n";
         source->Release();
     }
