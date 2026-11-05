@@ -12,3 +12,4 @@ If no device is found, confirm HR Data Broadcasts is enabled and that another ho
 ## Build
 
 From a Windows terminal with the Visual Studio C++ Build Tools installed, run `cargo build --release`. The executable is written to `target\\release\\band-heart-beat.exe`.
+For a standalone MinGW build when the GNU Rust toolchain is installed, use `rustup run stable-x86_64-pc-windows-gnu cargo build --release`. This produces `target\\release\\band-heart-beat.exe` without requiring Visual Studio's linker.
