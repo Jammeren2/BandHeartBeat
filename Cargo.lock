@@ -28,6 +28,7 @@ dependencies = [
  "futures-util",
  "tokio",
  "uuid",
+ "windows",
 ]
 
 [[package]]
