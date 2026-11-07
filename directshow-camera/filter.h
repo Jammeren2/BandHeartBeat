@@ -78,22 +78,26 @@ inline HRESULT Pin::StartDelivery(){
  std::lock_guard<std::recursive_mutex>guard(control);
  std::lock_guard<std::mutex>l(mutex);if(!peer)return VFW_E_NOT_CONNECTED;if(worker.joinable()){running=true;wake.notify_all();return S_OK;}
  auto commit=allocator->Commit();if(FAILED(commit))return commit;quitting=false;running=true;
- try{worker=std::thread([this]{
+ try{std::vector<BYTE>initial_placeholder(640*480*4),initial_cached(640*480*4),initial_working(640*480*4);worker=std::thread([this,placeholder=std::move(initial_placeholder),cached=std::move(initial_cached),working=std::move(initial_working)]()mutable{
   CoInitializeEx(nullptr,COINIT_MULTITHREADED);REFERENCE_TIME time=0;bool first=true;auto deadline=std::chrono::steady_clock::now();
+  bool have_good=false;uint64_t last_sequence=0;ULONGLONG last_good=0;{BYTE*p=placeholder.data();
+    for(int y=0;y<480;y++)for(int x=0;x<640;x++){int i=(y*640+x)*4;bool mark=(x/40+y/40)%2;p[i]=mark?0x73:0x20;p[i+1]=mark?0x8b:0x20;p[i+2]=mark?0xff:0x20;p[i+3]=0xff;}
+    HDC dc=CreateCompatibleDC(nullptr);BITMAPINFO bi{};bi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);bi.bmiHeader.biWidth=640;bi.bmiHeader.biHeight=480;bi.bmiHeader.biPlanes=1;bi.bmiHeader.biBitCount=32;void*bits=nullptr;HBITMAP bitmap=CreateDIBSection(dc,&bi,DIB_RGB_COLORS,&bits,nullptr,0);
+    if(bitmap&&bits){auto old=SelectObject(dc,bitmap);memcpy(bits,p,640*480*4);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,RGB(255,255,255));TextOutW(dc,180,220,L"PLACEHOLDER - NO CAMERA",23);memcpy(p,bits,640*480*4);SelectObject(dc,old);}if(bitmap)DeleteObject(bitmap);DeleteDC(dc);
+  }
   while(true){
    {std::unique_lock<std::mutex>l(mutex);wake.wait(l,[this]{return quitting||running;});if(quitting)break;}
    auto now=std::chrono::steady_clock::now();if(deadline<now-std::chrono::milliseconds(100))deadline=now;deadline+=std::chrono::nanoseconds(interval*100);
    IMediaSample*s=nullptr;HRESULT hr=allocator->GetBuffer(&s,nullptr,nullptr,0);if(FAILED(hr))break;
-   BYTE*sample_data=nullptr;hr=s->GetPointer(&sample_data);std::vector<BYTE>converted(rgb24?640*480*4:0);BYTE*p=rgb24?converted.data():sample_data;
+   BYTE*sample_data=nullptr;hr=s->GetPointer(&sample_data);BYTE*p=working.data();
    if(SUCCEEDED(hr)){
-    for(int y=0;y<480;y++)for(int x=0;x<640;x++){int i=(y*640+x)*4;bool mark=(x/40+y/40)%2;p[i]=mark?0x73:0x20;p[i+1]=mark?0x8b:0x20;p[i+2]=mark?0xff:0x20;p[i+3]=0xff;}
-    HDC dc=CreateCompatibleDC(nullptr);BITMAPINFO bi{};bi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);bi.bmiHeader.biWidth=640;bi.bmiHeader.biHeight=480;bi.bmiHeader.biPlanes=1;bi.bmiHeader.biBitCount=32;void*bits=nullptr;HBITMAP bitmap=CreateDIBSection(dc,&bi,DIB_RGB_COLORS,&bits,nullptr,0);
-    if(bitmap&&bits){auto old=SelectObject(dc,bitmap);memcpy(bits,p,640*480*4);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,RGB(255,255,255));TextOutW(dc,180,220,L"PLACEHOLDER - NO CAMERA",23);memcpy(p,bits,640*480*4);SelectObject(dc,old);}if(bitmap)DeleteObject(bitmap);DeleteDC(dc);
     // Fixed-size, versioned latest-frame IPC; mutex protects publication/copy.
     HANDLE map=OpenFileMappingW(FILE_MAP_READ,FALSE,BH_SHM_NAME);
     if(map){auto view=static_cast<const BYTE*>(MapViewOfFile(map,FILE_MAP_READ,0,0,sizeof(BhFrameHeader)+640*480*4));HANDLE gate=OpenMutexW(SYNCHRONIZE|MUTEX_MODIFY_STATE,FALSE,BH_FRAME_MUTEX);
-     DWORD waited=(view&&gate)?WaitForSingleObject(gate,0):WAIT_TIMEOUT; if(waited==WAIT_OBJECT_0){auto h=reinterpret_cast<const BhFrameHeader*>(view);if(h->magic==0x42484247&&h->version==1&&h->width==640&&h->height==480&&h->stride==2560&&h->bytes==640*480*4)memcpy(p,view+sizeof(BhFrameHeader),h->bytes);ReleaseMutex(gate);}else if(waited==WAIT_ABANDONED){ReleaseMutex(gate);}
-     if(gate)CloseHandle(gate);if(view)UnmapViewOfFile(view);CloseHandle(map);}
+     DWORD waited=(view&&gate)?WaitForSingleObject(gate,0):WAIT_TIMEOUT; if(waited==WAIT_OBJECT_0){auto h=reinterpret_cast<const BhFrameHeader*>(view);if(h->magic==0x42484247&&h->version==1&&h->width==640&&h->height==480&&h->stride==2560&&h->bytes==640*480*4){if(!have_good||h->sequence!=last_sequence){memcpy(cached.data(),view+sizeof(BhFrameHeader),h->bytes);last_sequence=h->sequence;last_good=GetTickCount64();have_good=true;}}else have_good=false;ReleaseMutex(gate);}else if(waited==WAIT_ABANDONED){ReleaseMutex(gate);}
+     if(gate)CloseHandle(gate);if(view)UnmapViewOfFile(view);CloseHandle(map);}else have_good=false;
+    memcpy(p,have_good&&GetTickCount64()-last_good<=2000?cached.data():placeholder.data(),640*480*4);
+    if(!rgb24)memcpy(sample_data,p,640*480*4);
     if(rgb24)for(int i=0;i<640*480;i++){sample_data[i*3]=p[i*4];sample_data[i*3+1]=p[i*4+1];sample_data[i*3+2]=p[i*4+2];}
     REFERENCE_TIME end=time+interval;s->SetTime(&time,&end);s->SetActualDataLength(640*480*(rgb24?3:4));s->SetSyncPoint(TRUE);s->SetDiscontinuity(first);first=false;time=end;hr=input->Receive(s);if(hr==S_OK)++delivered;
    }
