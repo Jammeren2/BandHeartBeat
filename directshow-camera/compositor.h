@@ -15,10 +15,15 @@ inline void Label(Gdiplus::Graphics&g,const std::wstring&s,float x,float y,float
  Gdiplus::FontFamily family(L"Segoe UI");Gdiplus::StringFormat format;format.SetFormatFlags(Gdiplus::StringFormatFlagsNoWrap);format.SetTrimming(Gdiplus::StringTrimmingNone);format.SetLineAlignment(Gdiplus::StringAlignmentCenter);
  for(;;){Gdiplus::Font f(&family,size,style,Gdiplus::UnitPixel);Gdiplus::RectF measured;g.MeasureString(s.c_str(),-1,&f,Gdiplus::PointF(0,0),&format,&measured);if((measured.Width<=w&&measured.Height<=h)||size<=6){Gdiplus::SolidBrush b(color);g.DrawString(s.c_str(),-1,&f,Gdiplus::RectF(x,y,w,h),&format,&b);break;}size-=.5f;}
 }
-inline void Heart(Gdiplus::Graphics&g,float pulse,bool outline,Gdiplus::Color color){
+// Pure absolute-time phase; no frame history or assumed render rate.
+inline float BeatPhase(ULONGLONG tick,int bpm,bool animate){return animate&&bpm>0?static_cast<float>(std::fmod(static_cast<double>(tick)*bpm/60000.0,1.0)):.35f;}
+inline float BeatStrength(float phase){auto bump=[](float x,float center,float width){float d=(x-center)/width;return std::exp(-d*d);};return std::clamp(bump(phase,.18f,.065f)+.25f*bump(phase,.36f,.08f),0.f,1.f);}
+inline float EcgSample(float phase){phase-=std::floor(phase);auto bump=[&](float center,float width){float d=(phase-center)/width;return std::exp(-d*d);};return -2.2f*bump(.12f,.035f)+3.f*bump(.23f,.018f)-13.f*bump(.27f,.018f)+7.f*bump(.31f,.025f)-4.f*bump(.51f,.07f);}
+struct Surface {Gdiplus::Bitmap card{360,172,PixelFormat32bppPARGB};std::vector<BYTE> shadow=std::vector<BYTE>(360*172*4,0);};
+inline void Heart(Gdiplus::Graphics&g,float pulse,bool outline,Gdiplus::Color color,float filling=1.f){
  Gdiplus::GraphicsPath heart;heart.AddBezier(30.f,39.f,4.f,23.f,19.f,9.f,30.f,21.f);heart.AddBezier(30.f,21.f,41.f,9.f,56.f,23.f,30.f,39.f);heart.CloseFigure();
  Gdiplus::Matrix t;t.Translate(30,28);t.Scale(pulse,pulse);t.Translate(-30,-28);heart.Transform(&t);
- if(outline){Gdiplus::Pen pen(color,1.8f);pen.SetLineJoin(Gdiplus::LineJoinRound);g.DrawPath(&pen,&heart);}else{Gdiplus::SolidBrush fill(color);g.FillPath(&fill,&heart);}
+ if(outline){Gdiplus::Pen pen(color,1.8f);pen.SetLineJoin(Gdiplus::LineJoinRound);g.DrawPath(&pen,&heart);}else{Gdiplus::SolidBrush base(Gdiplus::Color(85,color.GetR(),color.GetG(),color.GetB()));g.FillPath(&base,&heart);auto saved=g.Save();g.SetClip(&heart);Gdiplus::SolidBrush fill(color);g.FillRectangle(&fill,0.f,42.f-32.f*filling,60.f,40.f);g.Restore(saved);Gdiplus::Pen edge(color,.75f);g.DrawPath(&edge,&heart);}
 }
 }
 inline void Compose(std::vector<BYTE>&pixels,const Anchor&a,int bpm,bool live,bool demo,ULONGLONG tick,const CameraControls&settings=CameraControls{}){
@@ -26,27 +31,35 @@ inline void Compose(std::vector<BYTE>&pixels,const Anchor&a,int bpm,bool live,bo
  if(pixels.size()<640u*480u*4u||!a.visible)return;
  static Runtime runtime;if(!runtime.token)return;auto c=Sanitize(settings);
  // Render to a transparent, supersampled surface; SourceOver applies real alpha to video.
- Bitmap card(360,172,PixelFormat32bppPARGB);Graphics g(&card);g.Clear(Color(0,0,0,0));g.ScaleTransform(2,2);g.SetSmoothingMode(SmoothingModeAntiAlias);g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);g.SetPixelOffsetMode(PixelOffsetModeHighQuality);
+ thread_local Surface surface;auto&card=surface.card;Graphics g(&card);g.Clear(Color(0,0,0,0));g.ScaleTransform(2,2);g.SetSmoothingMode(SmoothingModeAntiAlias);g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);g.SetPixelOffsetMode(PixelOffsetModeHighQuality);
  bool active=bpm>0&&(live||demo);Color coral=active?Color(255,255,112,125):Color(255,153,165,177);Color white(255,246,249,252),muted(255,175,188,200);
  if(!c.transparent_background){
  GraphicsPath shadow;Round(shadow,2,16,176,60,14);SolidBrush shade(Color(50,0,0,0));g.FillPath(&shade,&shadow);
  GraphicsPath body;Round(body,1,13,178,60,13);LinearGradientBrush glass(PointF(0,0),PointF(0,82),Color(c.style==1?185:220,30,39,49),Color(195,15,22,30));g.FillPath(&glass,&body);Pen border(Color(68,196,218,234),.7f);g.DrawPath(&border,&body);
  }
- float phase=active?static_cast<float>(tick%60000)*bpm/60000.f:0;float pulse=1.f+.075f*std::pow(std::max(0.f,std::sin(phase*6.283185f)),6.f);
+ float phase=BeatPhase(tick,bpm,active&&c.animation_enabled);float strength=active&&c.animation_enabled?BeatStrength(phase):0.f;float pulse=1.f+.09f*strength;float filling=active&&c.animation_enabled&&c.heart_filled?.35f+.65f*strength:1.f;
  auto iconState=g.Save();g.TranslateTransform(0,14);
- if(c.style==0){if(!c.transparent_background){SolidBrush glow(Color(active?24:8,255,112,125));g.FillEllipse(&glow,9.f,8.f,42.f,42.f);}Heart(g,pulse,false,coral);}
- else if(c.style==1)Heart(g,pulse,true,coral);
- else if(c.style==2){Pen baseline(Color(50,144,220,211),1.f);g.DrawLine(&baseline,10.f,29.f,51.f,29.f);PointF wave[]={{10,29},{19,29},{23,24},{27,39},{32,16},{36,30},{41,29},{51,29}};Pen ecg(active?Color(255,108,224,205):muted,1.8f);ecg.SetLineJoin(LineJoinRound);g.DrawLines(&ecg,wave,8);}
+ if(c.style==0){if(!c.transparent_background){SolidBrush glow(Color(active?24:8,255,112,125));g.FillEllipse(&glow,9.f,8.f,42.f,42.f);}Heart(g,pulse,c.heart_filled==0,coral,filling);}
+ else if(c.style==1)Heart(g,pulse*.84f,c.heart_filled==0,coral,filling);
+ else if(c.style==2){
+  Pen baseline(Color(50,144,220,211),.7f);g.DrawLine(&baseline,9.f,29.f,52.f,29.f);
+  PointF wave[87];for(int i=0;i<87;i++){float x=9.f+i*.5f;wave[i]=PointF(x,29.f+(active?EcgSample(phase-(x-9.f)/43.f*1.25f):0.f));}
+  Pen ecg(active?Color(255,108,224,205):muted,1.6f);ecg.SetLineJoin(LineJoinRound);g.DrawLines(&ecg,wave,87);
+ }
  else {Pen rail(Color(55,187,205,218),3.f);rail.SetStartCap(LineCapRound);rail.SetEndCap(LineCapRound);g.DrawArc(&rail,12.f,12.f,37.f,37.f,145.f,250.f);Pen arc(coral,3.f);arc.SetStartCap(LineCapRound);arc.SetEndCap(LineCapRound);float fraction=active?(std::clamp(bpm,40,180)-40)/140.f:.0f;g.DrawArc(&arc,12.f,12.f,37.f,37.f,145.f,std::max(3.f,250.f*fraction));}
  g.Restore(iconState);
  Label(g,active?std::to_wstring(bpm):L"\x2014",61,19,107,44,36.f*c.scale/100.f,white,FontStyleBold);
+ if(c.ecg_enabled&&c.style!=2){
+  PointF trace[121];for(int i=0;i<121;i++){float x=14.f+i*.8f;trace[i]=PointF(x,66.f+(active?EcgSample(phase-i/120.f*1.6f)*.32f:0.f));}
+  Pen line(active?Color(220,108,224,205):muted,1.f);line.SetLineJoin(LineJoinRound);g.DrawLines(&line,trace,121);
+ }
  if(demo&&active)Label(g,L"DEMO",132,62,36,9,6.f,Color(255,240,187,108),FontStyleBold);
  Bitmap frame(640,480,640*4,PixelFormat32bppRGB,pixels.data());Graphics output(&frame);output.SetCompositingMode(CompositingModeSourceOver);output.SetInterpolationMode(InterpolationModeHighQualityBicubic);float z=c.size/100.f;
  if(c.transparent_background){
   // A tiny alpha dilation follows the foreground glyphs only. Empty video stays exact.
   g.Flush(FlushIntentionSync);BitmapData data{};Rect bounds(0,0,360,172);
   if(card.LockBits(&bounds,ImageLockModeRead,PixelFormat32bppPARGB,&data)==Ok){
-   std::vector<BYTE> localShadow(360*172*4,0);
+   auto&localShadow=surface.shadow;std::fill(localShadow.begin(),localShadow.end(),BYTE{0});
    for(int y=1;y<171;y++)for(int x=1;x<359;x++){
     unsigned alpha=0;
     for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++){
