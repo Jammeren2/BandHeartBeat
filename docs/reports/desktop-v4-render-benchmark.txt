@@ -1,9 +1,9 @@
 Synthetic640x480 BGRA, max size140/type160,96 measured frames per case after8 warmups. Frame reset included. No capture/encode/IPC measured.
-20fps timeline,style0,no-bg0: mean_ms=2.3378,p95_ms=3.3153,max_ms=3.528,render_budget_percent=4.67559
-20fps timeline,style0,no-bg1: mean_ms=3.41854,p95_ms=4.4837,max_ms=8.6677,render_budget_percent=6.83707
-20fps timeline,style2,no-bg0: mean_ms=2.00666,p95_ms=2.4868,max_ms=3.0773,render_budget_percent=4.01331
-20fps timeline,style2,no-bg1: mean_ms=3.1005,p95_ms=3.4524,max_ms=3.6158,render_budget_percent=6.20101
-30fps timeline,style0,no-bg0: mean_ms=2.00029,p95_ms=2.2854,max_ms=2.6336,render_budget_percent=6.00086
-30fps timeline,style0,no-bg1: mean_ms=3.20322,p95_ms=3.6075,max_ms=3.8324,render_budget_percent=9.60965
-30fps timeline,style2,no-bg0: mean_ms=1.88576,p95_ms=2.1967,max_ms=2.318,render_budget_percent=5.65727
-30fps timeline,style2,no-bg1: mean_ms=3.07646,p95_ms=3.5002,max_ms=3.7422,render_budget_percent=9.22937
+20fps timeline,style0,no-bg0: mean_ms=1.88814,p95_ms=2.0883,max_ms=2.1373,render_budget_percent=3.77627
+20fps timeline,style0,no-bg1: mean_ms=3.07079,p95_ms=3.3954,max_ms=3.5994,render_budget_percent=6.14158
+20fps timeline,style2,no-bg0: mean_ms=1.8499,p95_ms=2.2338,max_ms=2.679,render_budget_percent=3.6998
+20fps timeline,style2,no-bg1: mean_ms=2.97909,p95_ms=3.3224,max_ms=3.6378,render_budget_percent=5.95819
+30fps timeline,style0,no-bg0: mean_ms=1.89395,p95_ms=2.1846,max_ms=2.3002,render_budget_percent=5.68185
+30fps timeline,style0,no-bg1: mean_ms=3.04044,p95_ms=3.3258,max_ms=3.4427,render_budget_percent=9.12131
+30fps timeline,style2,no-bg0: mean_ms=1.82781,p95_ms=2.1027,max_ms=2.3572,render_budget_percent=5.48343
+30fps timeline,style2,no-bg1: mean_ms=3.01008,p95_ms=3.2877,max_ms=3.9236,render_budget_percent=9.03022
