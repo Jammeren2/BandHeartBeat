@@ -9,7 +9,7 @@ cl /nologo /std:c++17 /O2 /EHsc /MT /W4 /Fo"%OUT%\probe.obj" directshow-camera\p
 if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 /Fo"%OUT%\producer.obj" directshow-camera\producer.cpp /link /OUT:"%OUT%\camera-producer.exe" ole32.lib mfplat.lib mfreadwrite.lib mfuuid.lib mf.lib windowsapp.lib winhttp.lib gdi32.lib user32.lib
 if errorlevel 1 exit /b %errorlevel%
-cl /nologo /std:c++17 /O2 /EHsc /MT /W4 /Fo"%OUT%\camera_admin.obj" directshow-camera\camera_admin.cpp /link /OUT:"%OUT%\camera-admin.exe" ole32.lib oleaut32.lib strmiids.lib
+cl /nologo /std:c++17 /O2 /EHsc /MT /W4 /Fo"%OUT%\camera_admin.obj" directshow-camera\camera_admin.cpp /link /OUT:"%OUT%\camera-admin.exe" ole32.lib oleaut32.lib strmiids.lib advapi32.lib
 if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 /Fo"%OUT%\desktop.obj" directshow-camera\desktop.cpp /link /SUBSYSTEM:WINDOWS /OUT:"%OUT%\BandHeartBeat.exe" user32.lib gdi32.lib shell32.lib advapi32.lib uxtheme.lib dwmapi.lib
 if errorlevel 1 exit /b %errorlevel%
@@ -20,3 +20,4 @@ if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 /DBH_ISOLATED_TEST /Fo"%OUT%\desktop_test.obj" directshow-camera\desktop.cpp /link /SUBSYSTEM:WINDOWS /OUT:"%OUT%\desktop-test.exe" user32.lib gdi32.lib shell32.lib advapi32.lib uxtheme.lib dwmapi.lib
 if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 /Fo"%OUT%\tracking_probe.obj" directshow-camera\tracking_probe.cpp /link /OUT:"%OUT%\tracking-probe.exe"
+

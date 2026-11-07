@@ -1,0 +1,9 @@
+Synthetic640x480 BGRA, max size140/type160,96 measured frames per case after8 warmups. Frame reset included. No capture/encode/IPC measured.
+20fps timeline,style0,no-bg0: mean_ms=2.3378,p95_ms=3.3153,max_ms=3.528,render_budget_percent=4.67559
+20fps timeline,style0,no-bg1: mean_ms=3.41854,p95_ms=4.4837,max_ms=8.6677,render_budget_percent=6.83707
+20fps timeline,style2,no-bg0: mean_ms=2.00666,p95_ms=2.4868,max_ms=3.0773,render_budget_percent=4.01331
+20fps timeline,style2,no-bg1: mean_ms=3.1005,p95_ms=3.4524,max_ms=3.6158,render_budget_percent=6.20101
+30fps timeline,style0,no-bg0: mean_ms=2.00029,p95_ms=2.2854,max_ms=2.6336,render_budget_percent=6.00086
+30fps timeline,style0,no-bg1: mean_ms=3.20322,p95_ms=3.6075,max_ms=3.8324,render_budget_percent=9.60965
+30fps timeline,style2,no-bg0: mean_ms=1.88576,p95_ms=2.1967,max_ms=2.318,render_budget_percent=5.65727
+30fps timeline,style2,no-bg1: mean_ms=3.07646,p95_ms=3.5002,max_ms=3.7422,render_budget_percent=9.22937

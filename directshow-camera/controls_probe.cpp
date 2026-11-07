@@ -7,7 +7,7 @@
 #include "controls.h"
 #include "compositor.h"
 uint64_t Hash(const BYTE*p,size_t n){uint64_t h=1469598103934665603ull;for(size_t i=0;i<n;i++)h=(h^p[i])*1099511628211ull;return h;}
-int main(){static_assert(sizeof(CameraControls)==56);ControlsIpc ipc;CameraControls c;CameraState s;c.attach=0;c.manual_x=100;c.manual_y=100;ipc.Write(c);
+int main(){static_assert(sizeof(CameraControls)==68);ControlsIpc ipc;CameraControls c;CameraState s;c.attach=0;c.manual_x=100;c.manual_y=100;ipc.Write(c);
  // Offline deterministic renderer asserts each style/control affects actual pixels.
  std::set<uint64_t>hashes;Anchor a;a.Update({},2000,c);for(int style=0;style<4;style++){auto x=c;x.style=style;std::vector<BYTE>p(640*480*4,20);Compose(p,a,72,false,true,1000,x);hashes.insert(Hash(p.data(),p.size()));}if(hashes.size()!=4)return 1;
  Anchor tracked;tracked.Update({{200,120,100,100}},2000,c=CameraControls{});float x=tracked.x;c.offset_x=30;tracked.Update({{200,120,100,100}},2100,c);if(tracked.x<=x)return 2;c.attach=0;c.size=140;c.scale=160;c.manual_x=630;c.manual_y=470;a.Update({},2200,c);if(a.x+252>640||a.y+120.4f>481)return 3;
