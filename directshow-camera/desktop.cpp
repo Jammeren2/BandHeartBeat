@@ -58,8 +58,18 @@ void Slider(int i,int x){auto value=Value(i);*value=Minimum(i)+(std::clamp(x,883
 void Draw(HDC dc){RECT client;GetClientRect(window,&client);auto fill=CreateSolidBrush(bg);FillRect(dc,&client,fill);DeleteObject(fill);
  Text(dc,25,20,25,cyan,L"♡",FW_SEMIBOLD);Text(dc,60,23,22,white,L"BandHeartBeat",FW_SEMIBOLD);Text(dc,800,28,13,muted,L"НАТИВНАЯ ВИРТУАЛЬНАЯ КАМЕРА");
  Box(dc,{16,78,736,634},panel);bool current=!frame.empty()&&producer&&GetTickCount64()-frame_tick<2000;
- if(current){BITMAPINFO bi{};bi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);bi.bmiHeader.biWidth=640;bi.bmiHeader.biHeight=480;bi.bmiHeader.biPlanes=1;bi.bmiHeader.biBitCount=32;SetStretchBltMode(dc,COLORONCOLOR);if(controls.mirror_horizontal){for(int y=0;y<480;y++)for(int x=0;x<320;x++){int a=(y*640+x)*4,b=(y*640+639-x)*4;for(int c=0;c<4;c++)std::swap(frame[a+c],frame[b+c]);}}StretchDIBits(dc,preview.left,preview.top,preview.right-preview.left,preview.bottom-preview.top,0,0,640,480,frame.data(),&bi,DIB_RGB_COLORS,SRCCOPY);if(controls.mirror_horizontal){for(int y=0;y<480;y++)for(int x=0;x<320;x++){int a=(y*640+x)*4,b=(y*640+639-x)*4;for(int c=0;c<4;c++)std::swap(frame[a+c],frame[b+c]);}}
-  if(state.tick&&GetTickCount64()-state.tick<2000&&(!controls.attach||state.tracking==1||state.tracking==2||controls.fallback)){int x=preview.left+state.x*704/640,y=preview.top+state.y*528/480,w=state.w*704/640,h=state.h*528/480;auto pen=CreatePen(PS_DOT,1,cyan);auto old=SelectObject(dc,pen);auto brush=SelectObject(dc,GetStockObject(NULL_BRUSH));Rectangle(dc,x-2,y-2,x+w+2,y+h+2);Ellipse(dc,x-7,y-7,x+7,y+7);MoveToEx(dc,x-12,y,nullptr);LineTo(dc,x+12,y);MoveToEx(dc,x,y-12,nullptr);LineTo(dc,x,y+12);SelectObject(dc,brush);SelectObject(dc,old);DeleteObject(pen);}
+ if(current){BITMAPINFO bi{};bi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);bi.bmiHeader.biWidth=640;bi.bmiHeader.biHeight=480;bi.bmiHeader.biPlanes=1;bi.bmiHeader.biBitCount=32;
+  // Contain the fixed 640x480 transport in the preview rectangle.  Keeping
+  // source and destination aspect ratios explicit prevents future widescreen
+  // camera modes from silently cropping the sides; bars are intentional.
+  const int sw=640,sh=480,dw=preview.right-preview.left,dh=preview.bottom-preview.top;
+  const int draw_w=std::min(dw,dh*sw/sh),draw_h=std::min(dh,dw*sh/sw);
+  const int draw_x=preview.left+(dw-draw_w)/2,draw_y=preview.top+(dh-draw_h)/2;
+  FillRect(dc,&preview,static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));SetStretchBltMode(dc,COLORONCOLOR);
+  if(controls.mirror_horizontal){for(int y=0;y<480;y++)for(int x=0;x<320;x++){int a=(y*640+x)*4,b=(y*640+639-x)*4;for(int c=0;c<4;c++)std::swap(frame[a+c],frame[b+c]);}}
+  StretchDIBits(dc,draw_x,draw_y,draw_w,draw_h,0,0,sw,sh,frame.data(),&bi,DIB_RGB_COLORS,SRCCOPY);
+  if(controls.mirror_horizontal){for(int y=0;y<480;y++)for(int x=0;x<320;x++){int a=(y*640+x)*4,b=(y*640+639-x)*4;for(int c=0;c<4;c++)std::swap(frame[a+c],frame[b+c]);}}
+  if(state.tick&&GetTickCount64()-state.tick<2000&&(!controls.attach||state.tracking==1||state.tracking==2||controls.fallback)){int x=draw_x+state.x*draw_w/sw,y=draw_y+state.y*draw_h/sh,w=state.w*draw_w/sw,h=state.h*draw_h/sh;auto pen=CreatePen(PS_DOT,1,cyan);auto old=SelectObject(dc,pen);auto brush=SelectObject(dc,GetStockObject(NULL_BRUSH));Rectangle(dc,x-2,y-2,x+w+2,y+h+2);Ellipse(dc,x-7,y-7,x+7,y+7);MoveToEx(dc,x-12,y,nullptr);LineTo(dc,x+12,y);MoveToEx(dc,x,y-12,nullptr);LineTo(dc,x,y+12);SelectObject(dc,brush);SelectObject(dc,old);DeleteObject(pen);}
  }else{Text(dc,205,274,26,white,L"Ваша камера — здесь",FW_SEMIBOLD);Text(dc,145,316,16,muted,L"Выберите источник справа и нажмите «Запустить»");Text(dc,165,344,14,muted,L"Или проверьте интерфейс в режиме демо без камеры");}
  Box(dc,{36,108,228,136},RGB(19,25,31));Text(dc,46,114,12,current?cyan:muted,current?(state.demo?L"ДЕМО  ·  640 × 480":L"КАМЕРА  ·  640 × 480"):L"ОСТАНОВЛЕНО  ·  640 × 480");
  Box(dc,{240,108,458,136},RGB(19,25,31));Text(dc,252,114,12,current&&state.live?cyan:muted,!current?L"Пульс: ожидание":state.demo?L"72 BPM · ДЕМО":state.live&&state.bpm>0?std::to_wstring(state.bpm)+L" BPM · подключён":L"— BPM · нет связи");
