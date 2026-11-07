@@ -46,6 +46,9 @@ const ID_CAMERA_REMOVE: usize = 1014;
 
 #[cfg(target_os = "windows")]
 fn main() -> Result<()> {
+    if std::env::args().any(|a| a == "--ble-scan") {
+        return run_ble_scan_once();
+    }
     run_windows()
 }
 
@@ -402,6 +405,93 @@ fn run_windows() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn run_ble_scan_once() -> Result<()> {
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    rt.block_on(async {
+        let manager = Manager::new().await.context("Bluetooth manager")?;
+        let adapter = manager
+            .adapters()
+            .await?
+            .into_iter()
+            .next()
+            .context("no Bluetooth adapter")?;
+        adapter.start_scan(ScanFilter::default()).await?;
+        tokio::time::sleep(Duration::from_secs(8)).await;
+        let name_hint = std::env::args()
+            .collect::<Vec<_>>()
+            .windows(2)
+            .find(|a| a[0] == "--ble-name")
+            .map(|a| a[1].to_lowercase());
+        let address_hint = std::env::args()
+            .collect::<Vec<_>>()
+            .windows(2)
+            .find(|a| a[0] == "--ble-address")
+            .map(|a| a[1].to_uppercase());
+        let mut candidates = Vec::new();
+        for peripheral in adapter.peripherals().await? {
+            if let Some(props) = peripheral.properties().await? {
+                let name = props
+                    .local_name
+                    .unwrap_or_else(|| "unnamed BLE device".into());
+                let name_hit = name_hint
+                    .as_deref()
+                    .is_some_and(|h| name.to_lowercase().contains(h))
+                    || name.to_lowercase().contains("huawei band 10");
+                let addr_hit = address_hint
+                    .as_deref()
+                    .is_some_and(|h| props.address.to_string().to_uppercase() == *h);
+                if props.services.contains(&HEART_RATE_SERVICE) || name_hit || addr_hit {
+                    candidates.push((
+                        peripheral,
+                        name,
+                        props.services.contains(&HEART_RATE_SERVICE),
+                    ));
+                }
+            }
+        }
+        adapter.stop_scan().await?;
+        if candidates.is_empty() {
+            anyhow::bail!(
+                "no BLE candidates; require advertised 0x180D, name hint, or address hint"
+            );
+        }
+        for (peripheral, name, service_advertised) in candidates {
+            println!("candidate: {} service180D={}", name, service_advertised);
+            if let Err(error) = peripheral.connect().await {
+                println!("candidate connect failed: {}", error);
+                continue;
+            }
+            let result = async {
+                peripheral.discover_services().await?;
+                let characteristic = peripheral
+                    .characteristics()
+                    .into_iter()
+                    .find(|c| c.uuid == HEART_RATE_MEASUREMENT)
+                    .context("missing notify 0x2A37")?;
+                if !characteristic
+                    .properties
+                    .contains(btleplug::api::CharPropFlags::NOTIFY)
+                {
+                    anyhow::bail!("0x2A37 is not notify-capable");
+                }
+                Ok::<_, anyhow::Error>(())
+            }
+            .await;
+            let _ = peripheral.disconnect().await;
+            match result {
+                Ok(()) => {
+                    println!("ready: {} notify2A37=true", name);
+                    return Ok(());
+                }
+                Err(error) => println!("candidate rejected: {}", error),
+            }
+        }
+        anyhow::bail!("candidates found but none exposed notify 0x2A37")
+    })
 }
 
 async fn run_ble(tx: mpsc::Sender<UiMessage>, _demo: bool) -> Result<()> {
