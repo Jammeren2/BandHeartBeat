@@ -22,6 +22,14 @@
 #include "compositor.h"
 #include "face_worker.h"
 using Microsoft::WRL::ComPtr;
+// Aspect-preserving conversion into the fixed 640x480 IPC canvas. Full source
+// image is retained; unused area is black (letterbox/pillarbox).
+static void LetterboxBGRA(const BYTE* src,int sw,int sh,int stride,BYTE* dst){
+ std::fill(dst,dst+640*480*4,0); if(!src||sw<=0||sh<=0||stride<sw*4)return;
+ int dw=std::min(640,480*sw/sh), dh=std::min(480,640*sh/sw), ox=(640-dw)/2, oy=(480-dh)/2;
+ for(int y=0;y<dh;y++){int sy=y*sh/dh;const BYTE* row=src+sy*stride;BYTE* out=dst+((oy+y)*640+ox)*4;
+  for(int x=0;x<dw;x++){int sx=x*sw/dw;memcpy(out+x*4,row+sx*4,4);}}
+}
 struct CaptureCallback:Microsoft::WRL::RuntimeClass<Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,IMFSourceReaderCallback>{
  std::mutex lock;std::condition_variable ready;ComPtr<IMFSample>sample;HRESULT result=S_OK;DWORD flags=0;std::atomic<unsigned> callbacks{0};bool done=false,streaming=false;ComPtr<IMFSourceReader> source_reader;
  STDMETHODIMP OnReadSample(HRESULT hr,DWORD,DWORD f,LONGLONG,IMFSample*s)override{ComPtr<IMFSourceReader>next;{std::lock_guard<std::mutex>g(lock);result=hr;flags=f;sample=s;if(s)++callbacks;done=true;if(streaming&&SUCCEEDED(hr)&&!(f&MF_SOURCE_READERF_ENDOFSTREAM))next=source_reader;ready.notify_one();}if(next)next->ReadSample(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM),0,nullptr,nullptr,nullptr,nullptr);return S_OK;}STDMETHODIMP OnFlush(DWORD)override{return S_OK;}STDMETHODIMP OnEvent(DWORD,IMFMediaEvent*)override{return S_OK;}
