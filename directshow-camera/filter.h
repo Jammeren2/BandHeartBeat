@@ -83,7 +83,7 @@ inline void Pin::StartDelivery(){
     if(bitmap&&bits){auto old=SelectObject(dc,bitmap);memcpy(bits,p,640*480*4);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,RGB(255,255,255));TextOutW(dc,180,220,L"PLACEHOLDER - NO CAMERA",23);memcpy(p,bits,640*480*4);SelectObject(dc,old);}if(bitmap)DeleteObject(bitmap);DeleteDC(dc);
     // Fixed-size, versioned latest-frame IPC; mutex protects publication/copy.
     HANDLE map=OpenFileMappingW(FILE_MAP_READ,FALSE,BH_SHM_NAME);
-    if(map){auto view=static_cast<const BYTE*>(MapViewOfFile(map,FILE_MAP_READ,0,0,sizeof(BhFrameHeader)+640*480*4));HANDLE gate=OpenMutexW(SYNCHRONIZE|MUTEX_MODIFY_STATE,FALSE,L"Local\\BandHeartBeatFrameMutex");
+    if(map){auto view=static_cast<const BYTE*>(MapViewOfFile(map,FILE_MAP_READ,0,0,sizeof(BhFrameHeader)+640*480*4));HANDLE gate=OpenMutexW(SYNCHRONIZE|MUTEX_MODIFY_STATE,FALSE,BH_FRAME_MUTEX);
      DWORD waited=(view&&gate)?WaitForSingleObject(gate,0):WAIT_TIMEOUT; if(waited==WAIT_OBJECT_0){auto h=reinterpret_cast<const BhFrameHeader*>(view);if(h->magic==0x42484247&&h->version==1&&h->width==640&&h->height==480&&h->stride==2560&&h->bytes==640*480*4)memcpy(p,view+sizeof(BhFrameHeader),h->bytes);ReleaseMutex(gate);}else if(waited==WAIT_ABANDONED){ReleaseMutex(gate);}
      if(gate)CloseHandle(gate);if(view)UnmapViewOfFile(view);CloseHandle(map);}
     REFERENCE_TIME end=time+666667;s->SetTime(&time,&end);s->SetActualDataLength(640*480*4);s->SetSyncPoint(TRUE);s->SetDiscontinuity(first);first=false;time=end;hr=input->Receive(s);

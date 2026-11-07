@@ -81,6 +81,27 @@ fn run_windows() -> Result<()> {
     UI_TX.set(tx).ok();
     let overlay_error = overlay::start().err();
     start_worker();
+    if std::env::args().any(|arg| arg == "--backend") {
+        if let Some(error) = overlay_error {
+            return Err(error.into());
+        }
+        loop {
+            if let (Some(rx), Some(data)) = (UI_RX.get(), UI_DATA.get()) {
+                if let (Ok(rx), Ok(mut data)) = (rx.lock(), data.lock()) {
+                    for message in rx.try_iter() {
+                        match message {
+                            UiMessage::Status(status, live) => {
+                                data.status = status;
+                                data.live = live;
+                            }
+                            UiMessage::Bpm(bpm) => data.bpm = bpm,
+                        }
+                    }
+                }
+            }
+            thread::sleep(Duration::from_millis(200));
+        }
+    }
     camera_list();
 
     unsafe extern "system" fn wnd_proc(
