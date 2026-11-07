@@ -7,6 +7,7 @@
 #include <cmath>
 #include <vector>
 #include "controls.h"
+#include "geometry.h"
 struct FaceBox {float x,y,w,h;};
 enum class AnchorMode {Searching,Tracking,Holding,Fallback,Manual};
 struct Anchor {
@@ -14,7 +15,7 @@ struct Anchor {
  AnchorMode mode=AnchorMode::Searching;
  ULONGLONG previous=0,lost_at=0;bool updated=false,ever_seen=false,lost=false;
  void Update(const std::vector<FaceBox>&faces,ULONGLONG now,const CameraControls&settings=CameraControls{},ULONGLONG observed_at=~0ULL){
-  auto c=Sanitize(settings);float w=180.f*c.size/100,h=86.f*c.size/100;
+  auto c=Sanitize(settings);float w=CardWidth(c.size),h=CardHeight(c.size);
   float dt=updated&&now>=previous?static_cast<float>(now-previous)/1000.f:0.f;ULONGLONG last=previous;previous=now;updated=true;
   auto move=[&](float tx,float ty,float seconds,float tau){tx=std::clamp(tx,0.f,640-w);ty=std::clamp(ty,0.f,480-h);float a=1.f-std::exp(-std::max(0.f,seconds)/tau);x+=(tx-x)*a;y+=(ty-y)*a;};
   visible=true;

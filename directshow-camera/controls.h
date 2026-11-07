@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <new>
+#include "geometry.h"
 #ifdef BH_ISOLATED_TEST
 inline constexpr wchar_t CONTROL_NAME[]=L"Local\\BandHeartBeatControlsV3UxTest";
 inline constexpr wchar_t CONTROL_MUTEX[]=L"Local\\BandHeartBeatControlsMutexV3UxTest";
@@ -20,7 +21,7 @@ struct CameraControls {
 struct CameraState {
  uint32_t magic=0x42485354,version=3;
  uint64_t tick=0;
- int32_t x=420,y=60,w=180,h=86,tracking=0,bpm=0,live=0,demo=0;
+ int32_t x=420,y=60,w=static_cast<int>(CardWidth()),h=static_cast<int>(CardHeight()),tracking=0,bpm=0,live=0,demo=0;
 };
 struct CameraControlPage {CameraControls controls;CameraState state;};
 inline CameraControls Sanitize(CameraControls c){c.animation_enabled=c.animation_enabled?1:0;c.heart_filled=c.heart_filled?1:0;c.ecg_enabled=c.ecg_enabled?1:0;c.transparent_background=c.transparent_background?1:0;c.style=std::clamp(c.style,0,3);c.size=std::clamp(c.size,60,140);c.scale=std::clamp(c.scale,60,160);c.offset_x=std::clamp(c.offset_x,-200,200);c.offset_y=std::clamp(c.offset_y,-200,200);c.smoothing=std::clamp(c.smoothing,0,95);c.manual_x=std::clamp(c.manual_x,0,640);c.manual_y=std::clamp(c.manual_y,0,480);return c;}
