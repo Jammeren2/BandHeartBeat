@@ -19,8 +19,9 @@ implementation (desktop v2–v11) lives only in git history on
 - Verify with `cargo test -p bhb-core`, `vcam\test.cmd`, `npm run check` in `app`.
 
 ## Evidence boundaries
-- HUAWEI Band 10 compatibility is unconfirmed; do not claim it.
-- Live Discord acceptance and real-face tracking quality must be checked by the user.
+- HUAWEI Band 10 is the only device tested (user confirmed live BPM in Discord, 2026-11-07).
+  Everything else in README's device list is "presumed", not tested.
+- Discord delivery confirmed by the user on 2026-11-07; tracking quality is user-judged.
 - CPU/RAM/latency numbers are unmeasured unless a report says otherwise.
 
 ## Safety
