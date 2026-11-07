@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 200">
+  <!-- Original chibi: pastel blonde angel girl with a halo hugging a big heart.
+       The BPM number is drawn by the app inside the heart (see overlay.rs). -->
+  <defs>
+    <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff2c4"/>
+      <stop offset="1" stop-color="#f6cf86"/>
+    </linearGradient>
+    <linearGradient id="eye" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1f3f7a"/>
+      <stop offset="0.6" stop-color="#4b8df0"/>
+      <stop offset="1" stop-color="#b8dcff"/>
+    </linearGradient>
+    <radialGradient id="heart" cx="0.4" cy="0.35" r="0.8">
+      <stop offset="0" stop-color="#ffb3c9"/>
+      <stop offset="1" stop-color="#f0507e"/>
+    </radialGradient>
+  </defs>
+
+  <!-- wings -->
+  <path d="M60 120 C28 100 14 72 20 52 C36 66 48 66 58 72 C44 84 48 100 66 112 Z" fill="#fff" stroke="#d9e2f2" stroke-width="2"/>
+  <path d="M180 120 C212 100 226 72 220 52 C204 66 192 66 182 72 C196 84 192 100 174 112 Z" fill="#fff" stroke="#d9e2f2" stroke-width="2"/>
+  <!-- halo -->
+  <ellipse cx="120" cy="22" rx="34" ry="9" fill="none" stroke="#ffd95e" stroke-width="6"/>
+  <!-- back hair -->
+  <path d="M72 84 C70 50 94 34 120 34 C146 34 170 50 168 84 C172 110 166 128 158 136 L82 136 C74 128 68 110 72 84 Z" fill="url(#hair)" stroke="#e8bf6e" stroke-width="2"/>
+  <!-- face -->
+  <ellipse cx="120" cy="84" rx="40" ry="38" fill="#ffeee6"/>
+  <!-- bangs -->
+  <path d="M80 82 C80 54 98 42 120 42 C142 42 160 54 160 82 C154 72 148 66 140 64 C142 72 138 78 132 80 C130 72 126 66 120 64 C116 72 110 78 104 80 C104 72 102 68 100 66 C92 70 86 76 80 82 Z" fill="url(#hair)" stroke="#e8bf6e" stroke-width="1.5"/>
+  <!-- closed happy eyes -->
+  <path d="M96 88 Q104 80 112 88" fill="none" stroke="#5a3d2b" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M128 88 Q136 80 144 88" fill="none" stroke="#5a3d2b" stroke-width="3.5" stroke-linecap="round"/>
+  <ellipse cx="96" cy="100" rx="7" ry="3.5" fill="#ff9dbb" opacity="0.6"/>
+  <ellipse cx="144" cy="100" rx="7" ry="3.5" fill="#ff9dbb" opacity="0.6"/>
+  <path d="M114 104 Q120 110 126 104" fill="none" stroke="#c0567a" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- big heart she hugs -->
+  <path d="M120 196 C88 176 60 156 60 128 C60 110 74 98 90 98 C104 98 114 106 120 116 C126 106 136 98 150 98 C166 98 180 110 180 128 C180 156 152 176 120 196 Z" fill="url(#heart)" stroke="#fff" stroke-width="4"/>
+  <!-- arms around the heart -->
+  <ellipse cx="68" cy="132" rx="10" ry="8" fill="#ffeee6" stroke="#ecc9bb" stroke-width="1.5"/>
+  <ellipse cx="172" cy="132" rx="10" ry="8" fill="#ffeee6" stroke="#ecc9bb" stroke-width="1.5"/>
+
+  <!-- sparkles -->
+  <path d="M30 150 L33 158 L41 161 L33 164 L30 172 L27 164 L19 161 L27 158 Z" fill="#ffe680"/>
+  <path d="M210 150 L212 156 L218 158 L212 160 L210 166 L208 160 L202 158 L208 156 Z" fill="#fff"/>
+</svg>

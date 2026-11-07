@@ -10,6 +10,33 @@ pub enum OverlayStyle {
     Ring,
     Minimal,
     Card,
+    /// Anime mascots drawn from `assets/mascots/*.svg`.
+    Bunny,
+    Neko,
+    Angel,
+    /// Anime girls holding a plate, from `assets/girls/*.png`.
+    #[serde(rename = "girl_fox")]
+    GirlFox,
+    #[serde(rename = "girl_maid")]
+    GirlMaid,
+    #[serde(rename = "girl_angel")]
+    GirlAngel,
+    #[serde(rename = "girl_nurse")]
+    GirlNurse,
+    #[serde(rename = "girl_witch")]
+    GirlWitch,
+    #[serde(rename = "girl_space")]
+    GirlSpace,
+    #[serde(rename = "girl_neko")]
+    GirlNeko,
+    #[serde(rename = "girl_sakura")]
+    GirlSakura,
+    #[serde(rename = "girl_bunny")]
+    GirlBunny,
+    #[serde(rename = "girl_sport")]
+    GirlSport,
+    /// The user's own PNG or SVG (`custom_image`) with the number below.
+    Custom,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +118,8 @@ pub struct Settings {
     pub face_point: FacePoint,
     /// Badge offset from `face_point`, in face widths.
     pub point_offset: (f32, f32),
+    /// Image file for `OverlayStyle::Custom`.
+    pub custom_image: Option<String>,
     pub auto_scan: bool,
     /// Address of the last watch that delivered heart rate; tried first.
     pub last_device: Option<String>,
@@ -111,6 +140,7 @@ impl Default for Settings {
             badge_background: true,
             face_point: FacePoint::Auto,
             point_offset: (0.0, 0.0),
+            custom_image: None,
             auto_scan: true,
             last_device: None,
         }

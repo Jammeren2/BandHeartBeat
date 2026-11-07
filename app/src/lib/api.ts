@@ -1,7 +1,9 @@
 // Typed wrappers around the Rust commands in src-tauri/src/main.rs.
 import { Channel, invoke } from "@tauri-apps/api/core";
 
-export type Style = "capsule" | "heart" | "ecg" | "ring" | "minimal" | "card";
+export type Style = "capsule" | "heart" | "ecg" | "ring" | "minimal" | "card" | "bunny" | "neko" | "angel" | "custom"
+  | "girl_fox" | "girl_maid" | "girl_angel" | "girl_nurse" | "girl_witch"
+  | "girl_space" | "girl_neko" | "girl_sakura" | "girl_bunny" | "girl_sport";
 export type Placement = "track" | "fixed";
 export type Fit = "contain" | "cover";
 export type FacePoint = "auto" | "above" | "left" | "right" | "chin" | "left_shoulder" | "right_shoulder";
@@ -20,6 +22,7 @@ export interface Settings {
   face_point: FacePoint;
   /** Offset from the face point, in face widths. */
   point_offset: [number, number];
+  custom_image: string | null;
   auto_scan: boolean;
   last_device: string | null;
 }
@@ -90,4 +93,22 @@ export const STYLES: { id: Style; label: string }[] = [
   { id: "ring", label: "Кольцо" },
   { id: "minimal", label: "Минимал" },
   { id: "card", label: "Карточка" },
+  { id: "bunny", label: "Зайка" },
+  { id: "neko", label: "Неко" },
+  { id: "angel", label: "Ангелок" },
+  { id: "custom", label: "Своя картинка" },
+];
+
+/** Anime girls holding a plate for the number (crates/core/assets/girls). */
+export const GIRLS: { id: Style; label: string }[] = [
+  { id: "girl_fox", label: "Лисичка" },
+  { id: "girl_maid", label: "Горничная" },
+  { id: "girl_angel", label: "Ангел" },
+  { id: "girl_nurse", label: "Медсестра" },
+  { id: "girl_witch", label: "Ведьмочка" },
+  { id: "girl_space", label: "Космо" },
+  { id: "girl_neko", label: "Неко" },
+  { id: "girl_sakura", label: "Сакура" },
+  { id: "girl_bunny", label: "Зайка" },
+  { id: "girl_sport", label: "Спорт" },
 ];

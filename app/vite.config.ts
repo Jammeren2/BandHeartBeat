@@ -5,6 +5,7 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 export default defineConfig({
   plugins: [svelte()],
   clearScreen: false,
-  server: { port: 5173, strictPort: true },
+  // Mascot art lives in crates/core/assets and is shared with the renderer.
+  server: { port: 5173, strictPort: true, fs: { allow: [".."] } },
   build: { target: "es2022" },
 });

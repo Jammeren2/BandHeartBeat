@@ -1,11 +1,30 @@
 <script lang="ts">
+  import { ImagePlus } from "@lucide/svelte";
   import type { Style } from "./api";
+  import bunny from "../../../crates/core/assets/mascots/bunny.svg?url";
+  import neko from "../../../crates/core/assets/mascots/neko.svg?url";
+  import angel from "../../../crates/core/assets/mascots/angel.svg?url";
 
   let { style }: { style: Style } = $props();
+  // Anime girl art, keyed by file name: girl_fox -> assets/girls/fox.png.
+  const GIRL_ART = import.meta.glob("../../../crates/core/assets/girls/*.png", {
+    eager: true,
+    query: "?url",
+    import: "default",
+  }) as Record<string, string>;
+  const girlArt = (s: Style) => GIRL_ART[`../../../crates/core/assets/girls/${s.replace("girl_", "")}.png`];
+  const MASCOTS: Partial<Record<Style, string>> = { bunny, neko, angel };
   const heart = "M12 21s-7.5-4.6-9.6-9.2C.9 8.5 3 4.5 6.8 4.5c2.1 0 3.5 1.1 5.2 3 1.7-1.9 3.1-3 5.2-3 3.8 0 5.9 4 4.4 7.3C19.5 16.4 12 21 12 21z";
 </script>
 
 <!-- Miniatures of the overlay styles rendered by crates/core/src/overlay.rs. -->
+{#if style.startsWith("girl_")}
+  <img src={girlArt(style)} width="56" height="56" alt="" />
+{:else if MASCOTS[style]}
+  <img src={MASCOTS[style]} width="48" height="40" alt="" />
+{:else if style === "custom"}
+  <span class="custom"><ImagePlus size={24} /></span>
+{:else}
 <svg viewBox="0 0 64 32" width="64" height="32" aria-hidden="true">
   {#if style === "capsule"}
     <rect x="2" y="5" width="60" height="22" rx="11" fill="rgba(10,12,16,.7)" stroke="rgba(255,255,255,.25)" />
@@ -32,3 +51,17 @@
     <path d="M8 25l6-2 6 1 6-4 6 1 6-3 6 2 6-3 4 1" fill="none" stroke="#d9363e" stroke-width="1.2" />
   {/if}
 </svg>
+{/if}
+
+<style>
+  img {
+    object-fit: contain;
+  }
+  .custom {
+    width: 48px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+  }
+</style>

@@ -140,7 +140,14 @@ fn start(handle: &tauri::AppHandle) -> anyhow::Result<App> {
     )?;
 
     // Keep the per-user registration pointing at this copy of the DLL.
-    let dll = camera_dll(handle);
+    let bundled = camera_dll(handle);
+    let dll = vcam::stage(&bundled).unwrap_or_else(|e| {
+        eprintln!("camera DLL copy failed, registering it in place: {e:#}");
+        bundled
+    });
+    if let Err(e) = vcam::remove_legacy() {
+        eprintln!("old camera removal failed: {e:#}");
+    }
     if vcam::status(&dll) != vcam::Status::Installed {
         if let Err(e) = vcam::install(&dll) {
             eprintln!("virtual camera registration failed: {e:#}");
@@ -160,6 +167,7 @@ fn show(handle: &tauri::AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let state = start(app.handle())?;
             app.manage(state);

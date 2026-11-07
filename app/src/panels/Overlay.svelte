@@ -1,10 +1,16 @@
 <script lang="ts">
-  import { FACE_POINTS, PLATED, STYLES } from "../lib/api";
+  import { open } from "@tauri-apps/plugin-dialog";
+  import { FACE_POINTS, GIRLS, PLATED, STYLES } from "../lib/api";
   import StyleIcon from "../lib/StyleIcon.svelte";
   import WatchCard from "../lib/WatchCard.svelte";
   import { store } from "../lib/store.svelte";
 
   const s = $derived(store.settings!);
+
+  async function pickImage() {
+    const path = await open({ multiple: false, filters: [{ name: "Картинка", extensions: ["png", "svg"] }] });
+    if (typeof path === "string") store.set("custom_image", path);
+  }
 </script>
 
 <!-- Default panel: everything needed during a call. -->
@@ -27,6 +33,21 @@
       </button>
     {/each}
   </div>
+  <h2 class="section-title">Аниме-девочки</h2>
+  <div class="styles">
+    {#each GIRLS as style (style.id)}
+      <button class="style" class:active={s.style === style.id} onclick={() => store.set("style", style.id)} aria-pressed={s.style === style.id}>
+        <StyleIcon style={style.id} />
+        <span>{style.label}</span>
+      </button>
+    {/each}
+  </div>
+  {#if s.style === "custom"}
+    <div class="custom">
+      <span class="hint">{s.custom_image ? s.custom_image.split(/[\\/]/).pop() : "Картинка не выбрана"}</span>
+      <button class="btn" onclick={pickImage}>Выбрать PNG / SVG</button>
+    </div>
+  {/if}
 </section>
 
 {#if s.placement === "track"}
@@ -118,6 +139,17 @@
     background: var(--accent);
     border-color: transparent;
     color: #fff;
+  }
+  .custom {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .custom .hint {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .offset {
     display: flex;

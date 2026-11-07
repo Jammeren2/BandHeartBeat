@@ -1,12 +1,67 @@
-//! Heart-rate badge rendering. Six styles, all drawn with tiny-skia into a
-//! small premultiplied RGBA pixmap that is then blended onto the BGRA frame.
+//! Heart-rate badge rendering. Drawn styles, SVG anime mascots and the user's
+//! own image, all rendered with tiny-skia into a small premultiplied RGBA
+//! pixmap that is then blended onto the BGRA frame.
 
+use crate::girls::girl;
 use crate::settings::OverlayStyle;
 use ab_glyph::{Font, FontVec, PxScale, ScaleFont};
 use anyhow::{Context, Result};
+use std::cell::RefCell;
+use std::collections::HashMap;
 use tiny_skia::{
-    Color, FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, Stroke, Transform,
+    Color, FillRule, LineCap, LineJoin, Paint, Path, PathBuilder, Pixmap, PixmapPaint, Stroke, Transform,
 };
+
+/// An anime mascot: SVG art in a 240x200 viewBox plus where the number goes.
+struct Mascot {
+    svg: &'static str,
+    /// Number anchor in viewBox units; `center` aligns it horizontally on x.
+    number: (f32, f32),
+    center: bool,
+    size: f32,
+}
+
+fn mascot(style: OverlayStyle) -> Option<Mascot> {
+    Some(match style {
+        OverlayStyle::Bunny => Mascot { svg: include_str!("../assets/mascots/bunny.svg"), number: (176.0, 145.0), center: true, size: 46.0 },
+        OverlayStyle::Neko => Mascot { svg: include_str!("../assets/mascots/neko.svg"), number: (76.0, 180.0), center: false, size: 42.0 },
+        OverlayStyle::Angel => Mascot { svg: include_str!("../assets/mascots/angel.svg"), number: (120.0, 166.0), center: true, size: 46.0 },
+        _ => return None,
+    })
+}
+
+/// Mascot art is 240x200 units drawn at this many pixels per unit at scale 1.
+const MASCOT_UNIT: f32 = 0.75;
+/// Anime girl badges are square, this many pixels at scale 1.
+const GIRL_SIZE: f32 = 190.0;
+/// Box the custom image is fitted into at scale 1; the number sits below it.
+const CUSTOM_ART: (f32, f32) = (150.0, 130.0);
+
+/// Rasterises SVG data, aspect-fitted and centred in a `w`x`h` pixmap.
+fn rasterize_svg(data: &[u8], w: u32, h: u32) -> Option<Pixmap> {
+    let tree = resvg::usvg::Tree::from_data(data, &resvg::usvg::Options::default()).ok()?;
+    let size = tree.size();
+    let mut pm = Pixmap::new(w.max(1), h.max(1))?;
+    let k = (w as f32 / size.width()).min(h as f32 / size.height());
+    let (tx, ty) = ((w as f32 - size.width() * k) / 2.0, (h as f32 - size.height() * k) / 2.0);
+    resvg::render(&tree, Transform::from_row(k, 0.0, 0.0, k, tx, ty), &mut pm.as_mut());
+    Some(pm)
+}
+
+/// Loads a PNG or SVG file fitted into `w`x`h`.
+fn load_image(path: &str, w: u32, h: u32) -> Option<Pixmap> {
+    let bytes = std::fs::read(path).ok()?;
+    if path.to_lowercase().ends_with(".svg") {
+        return rasterize_svg(&bytes, w, h);
+    }
+    let img = Pixmap::decode_png(&bytes).ok()?;
+    let mut pm = Pixmap::new(w.max(1), h.max(1))?;
+    let k = (w as f32 / img.width() as f32).min(h as f32 / img.height() as f32);
+    let (tx, ty) = ((w as f32 - img.width() as f32 * k) / 2.0, (h as f32 - img.height() as f32 * k) / 2.0);
+    let paint = PixmapPaint { quality: tiny_skia::FilterQuality::Bicubic, ..Default::default() };
+    pm.draw_pixmap(0, 0, img.as_ref(), &paint, Transform::from_row(k, 0.0, 0.0, k, tx, ty), None);
+    Some(pm)
+}
 
 fn coral() -> Color {
     rgb(0xFF, 0x6B, 0x6B)
@@ -45,11 +100,15 @@ pub struct Frame<'a> {
     pub background: bool,
     /// Seconds since start; drives the beat and the ECG sweep.
     pub time: f32,
+    /// PNG/SVG path for the custom style.
+    pub custom_image: Option<&'a str>,
 }
 
 pub struct Renderer {
     bold: FontVec,
     mono: FontVec,
+    /// Rasterised art by "source@size"; `None` remembers files that failed to load.
+    art: RefCell<HashMap<String, Option<Pixmap>>>,
 }
 
 fn system_font(names: &[&str]) -> Result<FontVec> {
@@ -66,6 +125,7 @@ impl Renderer {
         Ok(Self {
             bold: system_font(&["segoeuib.ttf", "seguisb.ttf", "arialbd.ttf"])?,
             mono: system_font(&["consolab.ttf", "consola.ttf", "cour.ttf"])?,
+            art: RefCell::default(),
         })
     }
 
@@ -78,6 +138,9 @@ impl Renderer {
             OverlayStyle::Ring => (112.0, 112.0),
             OverlayStyle::Minimal => (136.0, 72.0),
             OverlayStyle::Card => (190.0, 100.0),
+            OverlayStyle::Bunny | OverlayStyle::Neko | OverlayStyle::Angel => (240.0 * MASCOT_UNIT, 200.0 * MASCOT_UNIT),
+            OverlayStyle::Custom => (CUSTOM_ART.0, CUSTOM_ART.1 + 62.0),
+            OverlayStyle::GirlFox | OverlayStyle::GirlMaid | OverlayStyle::GirlAngel | OverlayStyle::GirlNurse | OverlayStyle::GirlWitch | OverlayStyle::GirlSpace | OverlayStyle::GirlNeko | OverlayStyle::GirlSakura | OverlayStyle::GirlBunny | OverlayStyle::GirlSport => (GIRL_SIZE, GIRL_SIZE),
         }
     }
 
@@ -94,6 +157,72 @@ impl Renderer {
         let live = f.bpm.is_some();
         let text = f.bpm.map_or("—".to_string(), |b| b.to_string());
         let accent = if live { coral() } else { muted() };
+
+        if let Some(m) = mascot(f.style) {
+            let key = format!("{:?}@{w}x{h}", f.style);
+            let mut cache = self.art.borrow_mut();
+            let art = cache.entry(key).or_insert_with(|| rasterize_svg(m.svg.as_bytes(), w, h));
+            if let Some(art) = art {
+                // A small hop on every beat.
+                let hop = -3.0 * beat * f.scale;
+                pm.draw_pixmap(0, 0, art.as_ref(), &PixmapPaint::default(), Transform::from_translate(0.0, hop), None);
+            }
+            let mut c = Canvas { pm: &mut pm, s: f.scale * MASCOT_UNIT };
+            let size = m.size * (1.0 + 0.08 * beat);
+            let align = if m.center { Align::Center } else { Align::Left };
+            c.text(&self.bold, &text, size, m.number.0, m.number.1, white(), align, true);
+            if !m.center {
+                let tw = c.width(&self.bold, &text, size);
+                c.text(&self.bold, "BPM", 16.0, m.number.0 + tw + 6.0, m.number.1, rgb(0xFF, 0x7A, 0xA8), Align::Left, false);
+            }
+            return pm;
+        }
+
+        if let Some(g) = girl(f.style) {
+            let key = format!("{:?}@{w}", f.style);
+            let mut cache = self.art.borrow_mut();
+            let art = cache.entry(key).or_insert_with(|| {
+                let img = Pixmap::decode_png(g.png).ok()?;
+                let mut pm = Pixmap::new(w, h)?;
+                let k = w as f32 / img.width() as f32;
+                let paint = PixmapPaint { quality: tiny_skia::FilterQuality::Bicubic, ..Default::default() };
+                pm.draw_pixmap(0, 0, img.as_ref(), &paint, Transform::from_scale(k, k), None);
+                Some(pm)
+            });
+            if let Some(art) = art {
+                let hop = -3.0 * beat * f.scale;
+                pm.draw_pixmap(0, 0, art.as_ref(), &PixmapPaint::default(), Transform::from_translate(0.0, hop), None);
+            }
+            // Canvas units = image fractions x GIRL_SIZE.
+            let mut c = Canvas { pm: &mut pm, s: f.scale };
+            let size = g.size * GIRL_SIZE * (1.0 + 0.08 * beat);
+            let (x, y) = (g.plate.0 * GIRL_SIZE, g.plate.1 * GIRL_SIZE - 3.0 * beat + size * 0.36);
+            let color = if live { rgb(g.color.0, g.color.1, g.color.2) } else { alpha(rgb(g.color.0, g.color.1, g.color.2), 0.7) };
+            c.text(&self.bold, &text, size, x, y, color, Align::Center, g.shadow);
+            return pm;
+        }
+
+        if f.style == OverlayStyle::Custom {
+            let (aw, ah) = ((CUSTOM_ART.0 * f.scale) as u32, (CUSTOM_ART.1 * f.scale) as u32);
+            let path = f.custom_image.unwrap_or_default();
+            let key = format!("{path}@{aw}x{ah}");
+            let mut cache = self.art.borrow_mut();
+            let art = cache.entry(key).or_insert_with(|| load_image(path, aw, ah));
+            if let Some(art) = art {
+                let hop = -3.0 * beat * f.scale;
+                pm.draw_pixmap(0, 0, art.as_ref(), &PixmapPaint::default(), Transform::from_translate(0.0, hop), None);
+            }
+            let mut c = Canvas { pm: &mut pm, s: f.scale };
+            let cw = CUSTOM_ART.0;
+            if art.is_none() {
+                c.rrect(cw / 2.0 - 55.0, 10.0, 110.0, 110.0, 20.0, alpha(rgb(10, 12, 16), 0.5), Some(alpha(white(), 0.4)));
+                c.text(&self.bold, "?", 56.0, cw / 2.0, 86.0, alpha(white(), 0.7), Align::Center, false);
+            }
+            c.rrect(cw / 2.0 - 58.0, CUSTOM_ART.1 + 4.0, 116.0, 54.0, 27.0, alpha(rgb(10, 12, 16), 0.65), Some(alpha(white(), 0.2)));
+            c.heart(cw / 2.0 - 30.0, CUSTOM_ART.1 + 31.0, 24.0 * (1.0 + 0.16 * beat), accent);
+            c.text(&self.bold, &text, 34.0, cw / 2.0 - 12.0, CUSTOM_ART.1 + 43.0, white(), Align::Left, false);
+            return pm;
+        }
 
         match f.style {
             OverlayStyle::Capsule => {
@@ -136,6 +265,8 @@ impl Renderer {
                 let tw = c.width(&self.bold, &text, 60.0);
                 c.heart(tw + 26.0, 48.0, 22.0 * (1.0 + 0.2 * beat), accent);
             }
+            OverlayStyle::Bunny | OverlayStyle::Neko | OverlayStyle::Angel | OverlayStyle::Custom => unreachable!(),
+            OverlayStyle::GirlFox | OverlayStyle::GirlMaid | OverlayStyle::GirlAngel | OverlayStyle::GirlNurse | OverlayStyle::GirlWitch | OverlayStyle::GirlSpace | OverlayStyle::GirlNeko | OverlayStyle::GirlSakura | OverlayStyle::GirlBunny | OverlayStyle::GirlSport => unreachable!(),
             OverlayStyle::Card => {
                 // Without the white plate the card switches to light text over video.
                 let (fg, sub, line, shadow) = if f.background {
@@ -393,10 +524,24 @@ mod tests {
             OverlayStyle::Ring,
             OverlayStyle::Minimal,
             OverlayStyle::Card,
+            OverlayStyle::Bunny,
+            OverlayStyle::Neko,
+            OverlayStyle::Angel,
+            OverlayStyle::Custom,
+            OverlayStyle::GirlFox,
+            OverlayStyle::GirlMaid,
+            OverlayStyle::GirlAngel,
+            OverlayStyle::GirlNurse,
+            OverlayStyle::GirlWitch,
+            OverlayStyle::GirlSpace,
+            OverlayStyle::GirlNeko,
+            OverlayStyle::GirlSakura,
+            OverlayStyle::GirlBunny,
+            OverlayStyle::GirlSport,
         ] {
             for bpm in [Some(87), None] {
                 for background in [true, false] {
-                    let pm = r.render(&Frame { bpm, history: &[80, 85, 90], style, scale: 1.0, animate: true, background, time: 0.3 });
+                    let pm = r.render(&Frame { bpm, history: &[80, 85, 90], style, scale: 1.0, animate: true, background, time: 0.3, custom_image: None });
                     assert!(pm.pixels().iter().any(|p| p.alpha() > 200), "{style:?} {bpm:?}");
                 }
             }

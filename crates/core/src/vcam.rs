@@ -91,8 +91,40 @@ pub fn status(dll: &Path) -> Status {
     }
 }
 
+/// Copies the DLL to `%LOCALAPPDATA%\BandHeartBeat\camera\<content hash>\` and
+/// returns that path. Discord, browsers and other apps keep the registered DLL
+/// loaded, so it must never be the file a build or update overwrites.
+pub fn stage(dll: &Path) -> Result<std::path::PathBuf> {
+    use std::hash::{Hash, Hasher};
+    let bytes = std::fs::read(dll).with_context(|| format!("не найден {}", dll.display()))?;
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    bytes.hash(&mut h);
+    let base = std::env::var_os("LOCALAPPDATA").context("нет LOCALAPPDATA")?;
+    let dir = Path::new(&base).join("BandHeartBeat").join("camera").join(format!("{:016x}", h.finish()));
+    let target = dir.join("BandHeartBeatCamera.dll");
+    if !target.exists() {
+        std::fs::create_dir_all(&dir)?;
+        let tmp = dir.join("BandHeartBeatCamera.dll.tmp");
+        std::fs::write(&tmp, &bytes)?;
+        std::fs::rename(tmp, &target)?;
+    }
+    Ok(target)
+}
+
+/// "BandHeartBeat Virtual Camera" from the pre-rewrite app (desktop v2–v11).
+const LEGACY_CLSID: &str = "{5B4131AF-3298-47AA-9C12-33407A81914B}";
+
+/// Removes the old camera so Discord does not offer two BandHeartBeat devices.
+pub fn remove_legacy() -> Result<()> {
+    delete_trees(&[
+        format!("Software\\Classes\\CLSID\\{VIDEO_INPUT_CATEGORY}\\Instance\\{LEGACY_CLSID}"),
+        format!("Software\\Classes\\CLSID\\{LEGACY_CLSID}"),
+    ])
+}
+
 pub fn install(dll: &Path) -> Result<()> {
     anyhow::ensure!(dll.exists(), "не найден {}", dll.display());
+    remove_legacy()?;
     let dll = plain(dll);
     let class = class_key();
     set(&class, None, FRIENDLY_NAME)?;
@@ -105,7 +137,11 @@ pub fn install(dll: &Path) -> Result<()> {
 }
 
 pub fn remove() -> Result<()> {
-    for key in [instance_key(), class_key()] {
+    delete_trees(&[instance_key(), class_key()])
+}
+
+fn delete_trees(keys: &[String]) -> Result<()> {
+    for key in keys {
         let r = unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, &HSTRING::from(key.as_str())) };
         if r.is_err() && r != ERROR_FILE_NOT_FOUND {
             r.ok().with_context(|| format!("удаление {key}"))?;

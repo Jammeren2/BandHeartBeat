@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 200">
+  <!-- Original chibi: black-haired cat girl with pink streaks peeking over a BPM card.
+       The BPM number is drawn by the app on the card (see overlay.rs). -->
+  <defs>
+    <linearGradient id="eye" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5a0f3a"/>
+      <stop offset="0.6" stop-color="#ff2f7d"/>
+      <stop offset="1" stop-color="#ffa3c8"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a1830"/>
+      <stop offset="1" stop-color="#16101c"/>
+    </linearGradient>
+  </defs>
+
+  <!-- cat ears -->
+  <path d="M62 66 L56 18 L96 50 Z" fill="#1d1622" stroke="#0e0a12" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M66 58 L62 32 L84 50 Z" fill="#ff7aa8"/>
+  <path d="M178 66 L184 18 L144 50 Z" fill="#1d1622" stroke="#0e0a12" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M174 58 L178 32 L156 50 Z" fill="#ff7aa8"/>
+
+  <!-- back hair -->
+  <path d="M58 96 C52 58 84 40 120 40 C156 40 188 58 182 96 L186 140 L54 140 Z" fill="#1d1622"/>
+  <path d="M60 96 C62 120 58 132 52 140 L70 140 C68 126 70 110 70 100 Z" fill="#ff3d8b" opacity="0.85"/>
+  <path d="M180 96 C178 120 182 132 188 140 L170 140 C172 126 170 110 170 100 Z" fill="#ff3d8b" opacity="0.85"/>
+  <!-- face -->
+  <ellipse cx="120" cy="104" rx="50" ry="44" fill="#ffe6dd"/>
+  <!-- bangs -->
+  <path d="M68 98 C66 64 90 50 120 50 C150 50 174 64 172 98 C164 86 156 80 148 78 C150 88 146 94 140 96 C138 86 130 80 120 78 C114 88 106 94 98 96 C98 88 96 82 92 80 C82 84 74 90 68 98 Z" fill="#1d1622"/>
+  <path d="M120 52 C118 64 116 72 120 80" fill="none" stroke="#ff3d8b" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- eyes (playful wink) -->
+  <ellipse cx="100" cy="108" rx="10" ry="13" fill="url(#eye)"/>
+  <circle cx="96" cy="103" r="4" fill="#fff"/>
+  <circle cx="103" cy="114" r="2" fill="#fff" opacity="0.8"/>
+  <path d="M130 110 Q140 102 150 110" fill="none" stroke="#2a1b26" stroke-width="3.5" stroke-linecap="round"/>
+  <path d="M88 94 Q100 88 110 94" fill="none" stroke="#2a1b26" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- blush, fang smile -->
+  <ellipse cx="88" cy="124" rx="8" ry="4" fill="#ff7aa8" opacity="0.55"/>
+  <ellipse cx="152" cy="124" rx="8" ry="4" fill="#ff7aa8" opacity="0.55"/>
+  <path d="M112 126 Q120 134 128 126" fill="#b5446e" stroke="#7a2346" stroke-width="1.5"/>
+  <path d="M116 127 L118 131 L120 127 Z" fill="#fff"/>
+
+  <!-- card she peeks over -->
+  <rect x="28" y="130" width="184" height="64" rx="16" fill="url(#card)" stroke="#ff3d8b" stroke-width="3"/>
+  <!-- paws on the card -->
+  <ellipse cx="78" cy="132" rx="14" ry="9" fill="#ffe6dd" stroke="#e8c3b5" stroke-width="1.5"/>
+  <ellipse cx="162" cy="132" rx="14" ry="9" fill="#ffe6dd" stroke="#e8c3b5" stroke-width="1.5"/>
+  <path d="M72 130 v5 M78 129 v6 M84 130 v5 M156 130 v5 M162 129 v6 M168 130 v5" stroke="#e8c3b5" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- small heart icon on the card -->
+  <path d="M52 176 C44 170 38 165 38 158 C38 153 42 150 46 150 C49 150 51 152 52 154 C53 152 55 150 58 150 C62 150 66 153 66 158 C66 165 60 170 52 176 Z" fill="#ff3d8b"/>
+</svg>

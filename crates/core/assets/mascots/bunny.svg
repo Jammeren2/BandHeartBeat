@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 200">
+  <!-- Original chibi: silver-haired bunny girl with pink headphones holding a heart sign.
+       The BPM number is drawn by the app inside the heart (see overlay.rs). -->
+  <defs>
+    <linearGradient id="eye" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a1f5c"/>
+      <stop offset="0.55" stop-color="#e0408a"/>
+      <stop offset="1" stop-color="#ffb3d6"/>
+    </linearGradient>
+    <linearGradient id="hair" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e3dcf2"/>
+    </linearGradient>
+    <linearGradient id="sign" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ff7ab0"/>
+      <stop offset="1" stop-color="#e83e7d"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ears -->
+  <g transform="rotate(-14 62 40)">
+    <ellipse cx="62" cy="34" rx="15" ry="40" fill="url(#hair)" stroke="#c9bfe0" stroke-width="2"/>
+    <ellipse cx="62" cy="38" rx="7" ry="28" fill="#ffc2dc"/>
+  </g>
+  <g transform="rotate(10 104 40)">
+    <ellipse cx="104" cy="34" rx="15" ry="40" fill="url(#hair)" stroke="#c9bfe0" stroke-width="2"/>
+    <ellipse cx="104" cy="38" rx="7" ry="28" fill="#ffc2dc"/>
+  </g>
+
+  <!-- back hair -->
+  <path d="M30 112 C26 70 52 56 84 56 C118 56 142 72 138 114 C140 150 130 176 116 184 L52 184 C38 176 28 150 30 112 Z" fill="url(#hair)" stroke="#c9bfe0" stroke-width="2"/>
+  <!-- face -->
+  <ellipse cx="84" cy="118" rx="44" ry="42" fill="#ffe8df"/>
+  <!-- bangs -->
+  <path d="M38 112 C40 80 60 66 84 66 C110 66 130 80 130 112 C122 98 116 92 108 90 C110 100 104 106 98 108 C98 98 92 92 84 90 C80 100 72 106 62 108 C64 100 62 94 58 92 C50 98 44 104 38 112 Z" fill="url(#hair)" stroke="#c9bfe0" stroke-width="1.5"/>
+
+  <!-- headphones -->
+  <path d="M36 112 C34 70 56 52 84 52 C112 52 134 70 132 112" fill="none" stroke="#ff4fa3" stroke-width="8" stroke-linecap="round"/>
+  <rect x="26" y="102" width="20" height="34" rx="9" fill="#ff4fa3" stroke="#d12f7f" stroke-width="2"/>
+  <rect x="122" y="102" width="20" height="34" rx="9" fill="#ff4fa3" stroke="#d12f7f" stroke-width="2"/>
+  <circle cx="36" cy="119" r="5" fill="#ffd1e6"/>
+  <circle cx="132" cy="119" r="5" fill="#ffd1e6"/>
+
+  <!-- eyes -->
+  <ellipse cx="66" cy="124" rx="10" ry="13" fill="url(#eye)"/>
+  <ellipse cx="102" cy="124" rx="10" ry="13" fill="url(#eye)"/>
+  <circle cx="62" cy="119" r="4" fill="#fff"/>
+  <circle cx="98" cy="119" r="4" fill="#fff"/>
+  <circle cx="69" cy="130" r="2" fill="#fff" opacity="0.8"/>
+  <circle cx="105" cy="130" r="2" fill="#fff" opacity="0.8"/>
+  <path d="M54 110 Q66 104 76 110" fill="none" stroke="#5b3a55" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M92 110 Q102 104 114 110" fill="none" stroke="#5b3a55" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- blush + mouth -->
+  <ellipse cx="56" cy="142" rx="8" ry="4" fill="#ff8fb8" opacity="0.6"/>
+  <ellipse cx="112" cy="142" rx="8" ry="4" fill="#ff8fb8" opacity="0.6"/>
+  <path d="M78 146 Q84 151 90 146" fill="none" stroke="#b5446e" stroke-width="2.2" stroke-linecap="round"/>
+
+  <!-- heart sign with hands -->
+  <path d="M176 186 C150 168 124 150 124 120 C124 100 138 88 154 88 C164 88 172 94 176 102 C180 94 188 88 198 88 C214 88 228 100 228 120 C228 150 202 168 176 186 Z" fill="url(#sign)" stroke="#fff" stroke-width="4"/>
+  <ellipse cx="128" cy="150" rx="9" ry="7" fill="#ffe8df" stroke="#e8c3b5" stroke-width="1.5"/>
+  <ellipse cx="224" cy="150" rx="9" ry="7" fill="#ffe8df" stroke="#e8c3b5" stroke-width="1.5"/>
+
+  <!-- sparkles -->
+  <path d="M206 30 L210 42 L222 46 L210 50 L206 62 L202 50 L190 46 L202 42 Z" fill="#ffd1e6"/>
+  <path d="M160 52 L162 58 L168 60 L162 62 L160 68 L158 62 L152 60 L158 58 Z" fill="#fff"/>
+</svg>

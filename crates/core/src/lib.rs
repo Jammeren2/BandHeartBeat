@@ -4,6 +4,7 @@
 pub mod ble;
 pub mod camera;
 pub mod frame;
+pub mod girls;
 pub mod heart;
 pub mod overlay;
 pub mod pipeline;

@@ -156,6 +156,7 @@ impl Worker {
                 scale: s.size,
                 animate: s.pulse_animation,
                 background: s.badge_background,
+                custom_image: s.custom_image.as_deref(),
                 time: started.elapsed().as_secs_f32(),
             });
             let (cx, cy) = follower.step(
