@@ -461,12 +461,19 @@ fn run_ble_scan_once() -> Result<()> {
         }
         for (peripheral, name, service_advertised) in candidates {
             println!("candidate: {} service180D={}", name, service_advertised);
-            if let Err(error) = peripheral.connect().await {
+            if let Err(error) =
+                match tokio::time::timeout(Duration::from_secs(8), peripheral.connect()).await {
+                    Ok(result) => result.map_err(anyhow::Error::from),
+                    Err(_) => Err(anyhow::anyhow!("connect timeout after 8s")),
+                }
+            {
                 println!("candidate connect failed: {}", error);
                 continue;
             }
             let result = async {
-                peripheral.discover_services().await?;
+                tokio::time::timeout(Duration::from_secs(8), peripheral.discover_services())
+                    .await
+                    .map_err(|_| anyhow::anyhow!("discover services timeout after 8s"))??;
                 let characteristic = peripheral
                     .characteristics()
                     .into_iter()
@@ -481,7 +488,7 @@ fn run_ble_scan_once() -> Result<()> {
                 Ok::<_, anyhow::Error>(())
             }
             .await;
-            let _ = peripheral.disconnect().await;
+            let _ = tokio::time::timeout(Duration::from_secs(2), peripheral.disconnect()).await;
             match result {
                 Ok(()) => {
                     println!("ready: {} notify2A37=true", name);
