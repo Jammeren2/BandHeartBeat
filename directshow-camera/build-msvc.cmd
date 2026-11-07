@@ -21,3 +21,8 @@ cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 /DBH_ISOLATED_TEST /Fo"%OUT%\desk
 if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 /Fo"%OUT%\tracking_probe.obj" directshow-camera\tracking_probe.cpp /link /OUT:"%OUT%\tracking-probe.exe"
 
+
+if errorlevel 1 exit /b %errorlevel%
+cl /nologo /std:c++17 /O2 /EHsc /MT /W4 /Fo"%OUT%\registration_probe.obj" directshow-camera\registration_probe.cpp /link /OUT:"%OUT%\registration-probe.exe" advapi32.lib
+if errorlevel 1 exit /b %errorlevel%
+cl /nologo /std:c++17 /O2 /EHsc /MT /W4 /DBH_REGISTRY_TEST /Fo"%OUT%\camera_admin_test.obj" directshow-camera\camera_admin.cpp /link /OUT:"%OUT%\camera-admin-test.exe" ole32.lib oleaut32.lib strmiids.lib advapi32.lib
