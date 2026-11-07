@@ -405,6 +405,16 @@ fn run_windows() -> Result<()> {
 }
 
 async fn run_ble(tx: mpsc::Sender<UiMessage>, _demo: bool) -> Result<()> {
+    let ble_name = std::env::args()
+        .collect::<Vec<_>>()
+        .windows(2)
+        .find(|a| a[0] == "--ble-name")
+        .map(|a| a[1].to_lowercase());
+    let ble_address = std::env::args()
+        .collect::<Vec<_>>()
+        .windows(2)
+        .find(|a| a[0] == "--ble-address")
+        .map(|a| a[1].to_uppercase());
     let manager = Manager::new()
         .await
         .context("initialise Bluetooth manager")?;
@@ -420,16 +430,29 @@ async fn run_ble(tx: mpsc::Sender<UiMessage>, _demo: bool) -> Result<()> {
         "Сканирование HR Data Broadcast…".into(),
         false,
     ));
-    adapter
-        .start_scan(ScanFilter {
-            services: vec![HEART_RATE_SERVICE],
-        })
-        .await?;
+    adapter.start_scan(ScanFilter::default()).await?;
     tokio::time::sleep(Duration::from_secs(8)).await;
     let mut found = None;
     for p in adapter.peripherals().await? {
         if let Some(props) = p.properties().await? {
-            if props.services.contains(&HEART_RATE_SERVICE) {
+            let name_hit = props.local_name.as_deref().is_some_and(|name| {
+                ble_name
+                    .as_deref()
+                    .is_some_and(|hint| name.to_lowercase().contains(hint))
+                    || name.to_lowercase().contains("huawei band 10")
+            });
+            let address_hit = ble_address
+                .as_deref()
+                .is_some_and(|want| props.address.to_string().to_uppercase() == *want);
+            if props.services.contains(&HEART_RATE_SERVICE) || name_hit || address_hit {
+                let hint = props
+                    .local_name
+                    .clone()
+                    .unwrap_or_else(|| "unnamed BLE device".into());
+                let _ = tx.send(UiMessage::Status(
+                    format!("BLE candidate: {}; checking HR", hint),
+                    false,
+                ));
                 found = Some(p);
                 break;
             }
@@ -464,13 +487,32 @@ async fn run_ble(tx: mpsc::Sender<UiMessage>, _demo: bool) -> Result<()> {
     anyhow::bail!("HR stream ended or no readings for 20 seconds")
 }
 
-fn parse_bpm(data: &[u8]) -> Option<u16> {
+fn parse_hr(data: &[u8]) -> Option<(u16, Vec<u16>)> {
     let flags = *data.first()?;
-    if flags & 1 == 0 {
-        Some(*data.get(1)? as u16)
+    let mut index = 1;
+    let bpm = if flags & 1 == 0 {
+        let value = *data.get(index)? as u16;
+        index += 1;
+        value
     } else {
-        Some(u16::from_le_bytes([*data.get(1)?, *data.get(2)?]))
+        let value = u16::from_le_bytes([*data.get(index)?, *data.get(index + 1)?]);
+        index += 2;
+        value
+    };
+    if flags & 8 != 0 {
+        index = index.checked_add(2)?;
     }
+    let mut rr = Vec::new();
+    if flags & 16 != 0 {
+        while index + 1 < data.len() {
+            rr.push(u16::from_le_bytes([data[index], data[index + 1]]));
+            index += 2;
+        }
+    }
+    Some((bpm, rr))
+}
+fn parse_bpm(data: &[u8]) -> Option<u16> {
+    parse_hr(data).map(|(bpm, _)| bpm)
 }
 
 fn start_worker() {
@@ -674,7 +716,7 @@ unsafe fn draw_text(
 
 #[cfg(test)]
 mod tests {
-    use super::parse_bpm;
+    use super::{parse_bpm, parse_hr};
     #[test]
     fn decodes_standard_hr_measurements() {
         assert_eq!(parse_bpm(&[0, 72]), Some(72));
@@ -682,5 +724,10 @@ mod tests {
         assert_eq!(parse_bpm(&[]), None);
         assert_eq!(parse_bpm(&[0]), None);
         assert_eq!(parse_bpm(&[1, 44]), None);
+        assert_eq!(
+            parse_hr(&[16, 72, 0x34, 0x12, 0x78, 0x01]),
+            Some((72, vec![0x1234, 0x0178]))
+        );
+        assert_eq!(parse_hr(&[8, 72, 0, 0]), Some((72, vec![])));
     }
 }
