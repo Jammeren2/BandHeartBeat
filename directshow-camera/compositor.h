@@ -6,6 +6,7 @@
 #include <vector>
 #include <string>
 #include "tracking.h"
+#include "geometry.h"
 #pragma comment(lib,"gdiplus.lib")
 namespace bh_render {
 // One GDI+ lifetime per module, with thread-safe C++ static initialization.
@@ -19,7 +20,8 @@ inline void Label(Gdiplus::Graphics&g,const std::wstring&s,float x,float y,float
 inline float BeatPhase(ULONGLONG tick,int bpm,bool animate){return animate&&bpm>0?static_cast<float>(std::fmod(static_cast<double>(tick)*bpm/60000.0,1.0)):.35f;}
 inline float BeatStrength(float phase){auto bump=[](float x,float center,float width){float d=(x-center)/width;return std::exp(-d*d);};return std::clamp(bump(phase,.18f,.065f)+.25f*bump(phase,.36f,.08f),0.f,1.f);}
 inline float EcgSample(float phase){phase-=std::floor(phase);auto bump=[&](float center,float width){float d=(phase-center)/width;return std::exp(-d*d);};return -2.2f*bump(.12f,.035f)+3.f*bump(.23f,.018f)-13.f*bump(.27f,.018f)+7.f*bump(.31f,.025f)-4.f*bump(.51f,.07f);}
-struct Surface {Gdiplus::Bitmap card{360,172,PixelFormat32bppPARGB};std::vector<BYTE> shadow=std::vector<BYTE>(360*172*4,0);};
+inline constexpr int RasterWidth=252,RasterHeight=172;
+struct Surface {Gdiplus::Bitmap card{RasterWidth,RasterHeight,PixelFormat32bppPARGB};std::vector<BYTE> shadow=std::vector<BYTE>(RasterWidth*RasterHeight*4,0);};
 inline void Heart(Gdiplus::Graphics&g,float pulse,bool outline,Gdiplus::Color color,float filling=1.f){
  Gdiplus::GraphicsPath heart;heart.AddBezier(30.f,39.f,4.f,23.f,19.f,9.f,30.f,21.f);heart.AddBezier(30.f,21.f,41.f,9.f,56.f,23.f,30.f,39.f);heart.CloseFigure();
  Gdiplus::Matrix t;t.Translate(30,28);t.Scale(pulse,pulse);t.Translate(-30,-28);heart.Transform(&t);
@@ -34,8 +36,8 @@ inline void Compose(std::vector<BYTE>&pixels,const Anchor&a,int bpm,bool live,bo
  thread_local Surface surface;auto&card=surface.card;Graphics g(&card);g.Clear(Color(0,0,0,0));g.ScaleTransform(2,2);g.SetSmoothingMode(SmoothingModeAntiAlias);g.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);g.SetPixelOffsetMode(PixelOffsetModeHighQuality);
  bool active=bpm>0&&(live||demo);Color coral=active?Color(255,255,112,125):Color(255,153,165,177);Color white(255,246,249,252),muted(255,175,188,200);
  if(!c.transparent_background){
- GraphicsPath shadow;Round(shadow,2,16,176,60,14);SolidBrush shade(Color(50,0,0,0));g.FillPath(&shade,&shadow);
- GraphicsPath body;Round(body,1,13,178,60,13);LinearGradientBrush glass(PointF(0,0),PointF(0,82),Color(c.style==1?185:220,30,39,49),Color(195,15,22,30));g.FillPath(&glass,&body);Pen border(Color(68,196,218,234),.7f);g.DrawPath(&border,&body);
+ GraphicsPath shadow;Round(shadow,2,16,CardBaseWidth-4,60,14);SolidBrush shade(Color(50,0,0,0));g.FillPath(&shade,&shadow);
+ GraphicsPath body;Round(body,1,13,CardBaseWidth-2,60,13);LinearGradientBrush glass(PointF(0,0),PointF(0,82),Color(c.style==1?185:220,30,39,49),Color(195,15,22,30));g.FillPath(&glass,&body);Pen border(Color(68,196,218,234),.7f);g.DrawPath(&border,&body);
  }
  float phase=BeatPhase(tick,bpm,active&&c.animation_enabled);float strength=active&&c.animation_enabled?BeatStrength(phase):0.f;float pulse=1.f+.09f*strength;float filling=active&&c.animation_enabled&&c.heart_filled?.35f+.65f*strength:1.f;
  auto iconState=g.Save();g.TranslateTransform(0,14);
@@ -48,29 +50,29 @@ inline void Compose(std::vector<BYTE>&pixels,const Anchor&a,int bpm,bool live,bo
  }
  else {Pen rail(Color(55,187,205,218),3.f);rail.SetStartCap(LineCapRound);rail.SetEndCap(LineCapRound);g.DrawArc(&rail,12.f,12.f,37.f,37.f,145.f,250.f);Pen arc(coral,3.f);arc.SetStartCap(LineCapRound);arc.SetEndCap(LineCapRound);float fraction=active?(std::clamp(bpm,40,180)-40)/140.f:.0f;g.DrawArc(&arc,12.f,12.f,37.f,37.f,145.f,std::max(3.f,250.f*fraction));}
  g.Restore(iconState);
- Label(g,active?std::to_wstring(bpm):L"\x2014",61,19,107,44,36.f*c.scale/100.f,white,FontStyleBold);
+ Label(g,active?std::to_wstring(bpm):L"\x2014",56,19,62,44,36.f*c.scale/100.f,white,FontStyleBold);
  if(c.ecg_enabled&&c.style!=2){
-  PointF trace[121];for(int i=0;i<121;i++){float x=14.f+i*.8f;trace[i]=PointF(x,66.f+(active?EcgSample(phase-i/120.f*1.6f)*.32f:0.f));}
+  PointF trace[121];for(int i=0;i<121;i++){float x=12.f+i*.58f;trace[i]=PointF(x,66.f+(active?EcgSample(phase-i/120.f*1.6f)*.32f:0.f));}
   Pen line(active?Color(220,108,224,205):muted,1.f);line.SetLineJoin(LineJoinRound);g.DrawLines(&line,trace,121);
  }
- if(demo&&active)Label(g,L"DEMO",132,62,36,9,6.f,Color(255,240,187,108),FontStyleBold);
- Bitmap frame(640,480,640*4,PixelFormat32bppRGB,pixels.data());Graphics output(&frame);output.SetCompositingMode(CompositingModeSourceOver);output.SetInterpolationMode(InterpolationModeHighQualityBicubic);float z=c.size/100.f;
+ if(demo&&active)Label(g,L"DEMO",88,62,30,9,6.f,Color(255,240,187,108),FontStyleBold);
+ Bitmap frame(640,480,640*4,PixelFormat32bppRGB,pixels.data());Graphics output(&frame);output.SetCompositingMode(CompositingModeSourceOver);output.SetInterpolationMode(InterpolationModeHighQualityBicubic);
  if(c.transparent_background){
   // A tiny alpha dilation follows the foreground glyphs only. Empty video stays exact.
-  g.Flush(FlushIntentionSync);BitmapData data{};Rect bounds(0,0,360,172);
+  g.Flush(FlushIntentionSync);BitmapData data{};Rect bounds(0,0,RasterWidth,RasterHeight);
   if(card.LockBits(&bounds,ImageLockModeRead,PixelFormat32bppPARGB,&data)==Ok){
    auto&localShadow=surface.shadow;std::fill(localShadow.begin(),localShadow.end(),BYTE{0});
-   for(int y=1;y<171;y++)for(int x=1;x<359;x++){
+   for(int y=1;y<RasterHeight-1;y++)for(int x=1;x<RasterWidth-1;x++){
     unsigned alpha=0;
     for(int dy=-1;dy<=1;dy++)for(int dx=-1;dx<=1;dx++){
      int sourceY=y+dy-1,sourceX=x+dx-1;
      if(sourceY>=0&&sourceX>=0)alpha=std::max(alpha,static_cast<unsigned>(static_cast<BYTE*>(data.Scan0)[sourceY*data.Stride+sourceX*4+3]));
     }
-    localShadow[(y*360+x)*4+3]=static_cast<BYTE>(alpha*3/5);
+    localShadow[(y*RasterWidth+x)*4+3]=static_cast<BYTE>(alpha*3/5);
    }
-   card.UnlockBits(&data);Bitmap ink(360,172,360*4,PixelFormat32bppPARGB,localShadow.data());output.DrawImage(&ink,RectF(a.x,a.y,180*z,86*z),0,0,360,172,UnitPixel);
+   card.UnlockBits(&data);Bitmap ink(RasterWidth,RasterHeight,RasterWidth*4,PixelFormat32bppPARGB,localShadow.data());output.DrawImage(&ink,RectF(a.x,a.y,CardWidth(c.size),CardHeight(c.size)),0,0,RasterWidth,RasterHeight,UnitPixel);
   }
  }
- output.DrawImage(&card,RectF(a.x,a.y,180*z,86*z),0,0,360,172,UnitPixel);
+ output.DrawImage(&card,RectF(a.x,a.y,CardWidth(c.size),CardHeight(c.size)),0,0,RasterWidth,RasterHeight,UnitPixel);
 }
 

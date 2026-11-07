@@ -15,7 +15,7 @@ int main(){bh_render::Runtime runtime;CLSID png{};UINT n=0,bytes=0;GetImageEncod
   std::vector<BYTE>p;Background(p);auto before=p;CameraControls c;c.style=style;Anchor a;a.x=80;a.y=180;a.visible=true;a.mode=row==1?AnchorMode::Holding:row==2?AnchorMode::Fallback:row==4?AnchorMode::Manual:AnchorMode::Tracking;a.tracking=row==0||row==3;if(row==3){c.size=140;c.scale=160;}if(row==4){c.size=60;c.scale=60;}
   Compose(p,a,row==2?0:row==3?999:82,row!=1&&row!=2,row==1,1030,c);
   uint64_t hash=0;for(size_t i=0;i<p.size();i++)hash=hash*131+p[i];if(row==0)styles.insert(hash);
-  for(int y=0;y<480;y++)for(int x=0;x<640;x++)if(x<79||x>333||y<179||y>302)for(int k=0;k<3;k++)if(p[(y*640+x)*4+k]!=before[(y*640+x)*4+k])return 2;
+  for(int y=0;y<480;y++)for(int x=0;x<640;x++)if(x<79||x>258||y<179||y>302)for(int k=0;k<3;k++)if(p[(y*640+x)*4+k]!=before[(y*640+x)*4+k])return 2;
   Bitmap frame(640,480,2560,PixelFormat32bppRGB,p.data());float sx=static_cast<float>(style*360),sy=static_cast<float>(row*200);bh_render::Label(out,names[style],sx+16,sy+5,330,20,12,Color(255,227,235,242),FontStyleBold);bh_render::Label(out,rows[row],sx+16,sy+27,330,18,10,Color(255,149,168,185));out.DrawImage(&frame,RectF(sx,sy+52,360,148),35,160,360,148,UnitPixel);
   if(row==0&&style==0)frame.Save(L"directshow-camera/out/renderer-review/live-glass-frame.png",&png);
  }
@@ -23,7 +23,7 @@ int main(){bh_render::Runtime runtime;CLSID png{};UINT n=0,bytes=0;GetImageEncod
  // Invisible states must not touch the video; held states remain visible without fallback.
  std::vector<BYTE>p;Background(p);auto original=p;Anchor a;a.visible=false;Compose(p,a,82,true,false,1000);if(p!=original)return 4;a.visible=true;a.mode=AnchorMode::Holding;CameraControls c;c.fallback=0;Compose(p,a,82,true,false,1000,c);if(p==original)return 5;
  // Check actual translucency: different video remains different underneath the panel.
- std::vector<BYTE>q;Background(q,1);a.x=80;a.y=180;Compose(q,a,82,true,false,1000,c);Background(p);Compose(p,a,82,true,false,1000,c);size_t sample=(220*640+170)*4;if(p[sample]==q[sample])return 6;
+ std::vector<BYTE>q;Background(q,1);a.x=80;a.y=180;Compose(q,a,82,true,false,1000,c);Background(p);Compose(p,a,82,true,false,1000,c);size_t sample=(240*640+150)*4;if(p[sample]==q[sample])return 6;
  if(sheet.Save(L"directshow-camera/out/renderer-review/contact-sheet.png",&png)!=Ok)return 7;
  Bitmap modes(1280,1920,PixelFormat32bppRGB);Graphics compare(&modes);compare.Clear(Color(255,12,17,24));
  for(int row=0;row<12;row++){
@@ -33,10 +33,10 @@ int main(){bh_render::Runtime runtime;CLSID png{};UINT n=0,bytes=0;GetImageEncod
    Anchor anchor;anchor.x=80;anchor.y=180;anchor.visible=true;anchor.mode=state==1?AnchorMode::Holding:state==2?AnchorMode::Fallback:AnchorMode::Tracking;
    Compose(video,anchor,state==2?0:82,state==0,state==1,1030,config);
    if(video==clean)return 8;uint64_t signature=0;for(size_t i=0;i<video.size();i++)signature=signature*131+video[i];distinct.insert(signature);
-   for(int y=0;y<480;y++)for(int x=0;x<640;x++)if(x<79||x>261||y<179||y>267)for(int k=0;k<3;k++)if(video[(y*640+x)*4+k]!=clean[(y*640+x)*4+k])return 9;
+   for(int y=0;y<480;y++)for(int x=0;x<640;x++)if(x<79||x>207||y<179||y>267)for(int k=0;k<3;k++)if(video[(y*640+x)*4+k]!=clean[(y*640+x)*4+k])return 9;
    if(plain){
     // Corners, former divider, inter-column gap and former badge must stay untouched.
-    const POINT untouched[]={{85,185},{250,190},{170,250},{135,222},{91,209},{170,260}};
+    const POINT untouched[]={{85,185},{200,190},{170,257},{134,222},{91,209},{170,260}};
     for(auto point:untouched)for(int k=0;k<3;k++){auto i=(point.y*640+point.x)*4+k;if(video[i]!=clean[i]){std::cerr<<"residue "<<point.x<<","<<point.y<<" style "<<style<<"\n";return 10;}}
    }
    float sx=static_cast<float>(style*320),sy=static_cast<float>(row*160);bh_render::Label(compare,names[style],sx+12,sy+3,300,18,11,Color(255,230,239,247),FontStyleBold);
@@ -65,10 +65,21 @@ int main(){bh_render::Runtime runtime;CLSID png{};UINT n=0,bytes=0;GetImageEncod
  }
  CameraControls optional;optional.ecg_enabled=1;optional.style=3;Anchor extra;extra.x=80;extra.y=180;std::vector<BYTE> first,second;Background(first);Background(second);Compose(first,extra,60,true,false,120,optional);Compose(second,extra,60,true,false,550,optional);if(first==second)return 19;
  optional.animation_enabled=0;Background(first);Background(second);Compose(first,extra,60,true,false,120,optional);Compose(second,extra,60,true,false,550,optional);if(first!=second)return 20;
- optional.animation_enabled=1;optional.transparent_background=1;optional.size=140;optional.scale=160;extra.x=388;extra.y=359;Background(first);auto empty=first;Compose(first,extra,999,true,true,180,optional);
- for(int y=0;y<480;y++)for(int x=0;x<640;x++)if(x<387||y<358)for(int k=0;k<3;k++)if(first[(y*640+x)*4+k]!=empty[(y*640+x)*4+k])return 21;
- for(int k=0;k<3;k++)if(first[(365*640+394)*4+k]!=empty[(365*640+394)*4+k])return 22;
+ optional.animation_enabled=1;optional.transparent_background=1;optional.size=140;optional.scale=160;extra.x=640-CardWidth(140);extra.y=480-CardHeight(140);Background(first);auto empty=first;Compose(first,extra,999,true,true,180,optional);
+ for(int y=0;y<480;y++)for(int x=0;x<640;x++)if(x<extra.x-1||y<extra.y-1)for(int k=0;k<3;k++)if(first[(y*640+x)*4+k]!=empty[(y*640+x)*4+k])return 21;
+ for(int k=0;k<3;k++)if(first[(365*640+470)*4+k]!=empty[(365*640+470)*4+k])return 22;
  if(temporal.Save(L"directshow-camera/out/renderer-review/animation-filmstrip.png",&png)!=Ok)return 18;
+ Bitmap compact(1000,1550,PixelFormat32bppRGB);Graphics compactOut(&compact);compactOut.Clear(Color(255,12,17,24));const int values[]={0,72,82,120,999};
+ for(int row=0;row<5;row++)for(int style=0;style<4;style++){
+  float sx=static_cast<float>(style*250),sy=static_cast<float>(row*310);bh_render::Label(compactOut,names[style],sx+10,sy+3,235,20,11,Color(255,230,238,246),FontStyleBold);
+  std::wstring caption=std::to_wstring(values[row])+L" / 126px / "+(row==4?L"max size+type":L"normal size+type");bh_render::Label(compactOut,caption,sx+10,sy+25,235,18,9,Color(255,170,185,197));
+  for(int plain=0;plain<2;plain++){
+   CameraControls config;config.style=style;config.transparent_background=plain;config.ecg_enabled=1;if(row==4){config.size=140;config.scale=160;}Anchor anchor;anchor.x=80;anchor.y=180;std::vector<BYTE>video;Background(video,row%2?2:0);auto clean=video;Compose(video,anchor,values[row],values[row]>0,row==3,180,config);
+   for(int y=0;y<480;y++)for(int x=0;x<640;x++)if(x<79||x>81+CardWidth(config.size)||y<179||y>181+CardHeight(config.size))for(int k=0;k<3;k++)if(video[(y*640+x)*4+k]!=clean[(y*640+x)*4+k])return 23;
+   Bitmap frame(640,480,2560,PixelFormat32bppRGB,video.data());compactOut.DrawImage(&frame,RectF(sx,sy+48+plain*130.f,250,130),65,180,250,130,UnitPixel);
+  }
+ }
+ if(compact.Save(L"directshow-camera/out/renderer-review/compact-width.png",&png)!=Ok)return 24;
  std::ofstream timing("directshow-camera/out/renderer-review/animation-benchmark.txt");
  timing<<"Synthetic640x480 BGRA, max size140/type160,96 measured frames per case after8 warmups. Frame reset included. No capture/encode/IPC measured.\n";
  for(int fps:{20,30})for(int style:{0,2})for(int plain:{0,1}){
