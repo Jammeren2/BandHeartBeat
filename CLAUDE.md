@@ -1,38 +1,44 @@
+> Startup correction (2026-11-07): historical archive 442FAFA7 / 891,941 bytes FAILED startup. Empty-text DrawTextW guard fixed the first-paint crash; replacement archive is 893,424 bytes, SHA256 55ADF1F2108C6A8C31F3F7D72D48937E1382BE7DCC2F69C0578969545C70AD2C. Author verified three packaged demo starts with telemetry72 0 1; this was not independent QA. Native preview/drag-anchor/style/scale UX remains future work and no Discord/live-face acceptance is claimed.
+
 # BandHeartBeat - Project Instructions & Guidelines
 
 ## 1. Project Overview & Primary Objective
 - **Project Name:** BandHeartBeat
-- **Current Phase:** Proof of Concept & OBS Camera Overlay Integration
-- **Core User Objective:** Render a real-time heart-rate overlay (pulsing coral heart, large legible BPM counter) **beside the user's head directly inside their Discord webcam/video call feed** on Windows. The native Win32 window is a local control surface, not the primary user goal.
-- **Delivery Pipeline (Phase 1 MVP):**
-  - **Telemetry:** Bluetooth SIG BLE GATT Heart Rate Service (`0x180D`/`0x2A37`) via `btleplug`.
-  - **OBS Overlay:** Embedded loopback `std::net` HTTP/SSE server on `127.0.0.1:8765/overlay` providing transparent HTML5/SVG graphics for OBS Studio Browser Source (zero external web frameworks, no `axum`, no browser runtime in the binary).
-  - **Discord Ingestion:** OBS Virtual Camera transmits the composited webcam + overlay feed into Discord video calls.
-  - **Desktop Shell:** Compact native Win32 control window and tray icon (`Shell_NotifyIconW`) using the cached `windows` 0.61 crate.
+- **Current Phase:** Standalone Startup Correction and Desktop UX Planning
+- **Core Target:** A **self-contained Windows companion application** that directly captures the user's physical webcam, performs local head tracking via native Windows APIs, composites live BPM telemetry and an animated coral heart beside the detected head, and exposes its own virtual camera for Discord **without requiring OBS Studio**.
+- **Retained Fallback:** The existing OBS-based HTTP/SSE application (commits `91f894b`, `fceb27c`) remains the built, working fallback in `target/release` (GNU binary 3.29 MB) and `target/msvc-verified` (MSVC binary 1.00 MB). Its end-to-end integration into a live Discord video call remains unverified on physical hardware.
 
-## 2. Completed Commits & Release Artifacts
-- **Commit `91f894b`:** *Add compact native Windows heart-rate monitor and tray* (Win32 window, tray menu, atomic retry guard, demo mode).
-- **Commit `fceb27c`:** *Add transparent localhost OBS heart-rate overlay* (Embedded loopback `std::net` HTTP/SSE server, transparent SVG pulse animation).
-- **Release Executable Artifact:** `target\release\band-heart-beat.exe` (exact size: `3,287,394` bytes) compiled via `rustup run stable-x86_64-pc-windows-gnu cargo build --release`. Statically links MinGW runtime; requires only native Windows system DLLs.
+## 2. Frozen Standalone Package (Commit `7d4137b`)
+- **Distribution Package:**
+  - Folder: `dist/standalone`
+  - Archive: `dist/BandHeartBeat-standalone.zip` (exact size: `891,941` bytes, SHA256: `442FAFA761DAB53C4F95DC44FF7D3E347032332106E326B19C6B1F3D90023EEA`).
+  - Contents: `BandHeartBeat.exe`, `BandHeartBeatDirectShow.dll`, `camera-producer.exe`, `camera-admin.exe`, `install-current-user.cmd`, `rollback.cmd`, and `README-RU.md`.
+- **Pipeline Details:**
+  - **DirectShow Virtual Camera:** In-process filter (`BandHeartBeatDirectShow.dll`, 152,064 B) advertising nominal 15 fps 640x480 RGB32, delivering paced samples via `CLSID_MemoryAllocator` and `IMemInputPin::Receive`.
+  - **Camera Producer & Face Tracking:** Media Foundation capture into 640x480 RGB32; asynchronous WinRT `FaceDetector` worker operating at ~5 Hz on downsampled Gray8 frames.
+  - **Capture Reality:** Observed USB webcam capture was 21 frames in 3031 ms (~7–8 unique fps), repeated by DirectShow filter to maintain nominal 15 fps. Real-user camera face tracking quality remains unverified.
+  - **Reference Face Test:** Public OpenCV reference fixture (`lena.jpg`) successfully detected 1 face (anchor 450,199); test fixture is excluded from distribution.
+  - **Per-User Registration:** `camera-admin.exe` writes only unique HKCU entries (`CLSID_VideoInputDeviceCategory`). Verified end-to-end through category moniker `BindToObject` and 3 actual samples; test registration was cleanly removed.
+- **Incomplete Experiment — Media Foundation Virtual Camera:**
+  - Windows 11 `MFCreateVirtualCamera` source boundary failed activation with **`Start 0x80004002 E_NOINTERFACE`**; retained strictly as an incomplete diagnostic experiment.
 
-## 3. Toolchain & Environment Realities
-- **Visual Studio 2022 Build Tools:** Installation on `D:\VSBuildTools` is completed and verified via `vswhere` (`BuildTools2022 17.14.44`, `isComplete: true`, `isLaunchable: true`, `isRebootRequired: false`).
-- **Current Tested Artifact:** The GNU target release binary (`3,287,394` bytes) remains the tested artifact.
-
-## 4. Strict Evidence & Fact-Reporting Boundaries
+## 3. Strict Evidence & Fact-Reporting Boundaries
 - **HUAWEI Band 10 Compatibility:** Formally **UNCONFIRMED / UNVERIFIED**. No official Huawei documentation or physical test confirms native HR Data Broadcast on Band 10. Generic BLE simulators (Nordic nRF Connect) and in-process mock streams test protocol fidelity, but do NOT prove Band 10 hardware compatibility.
-- **End-to-End OBS/Discord Video Pipeline:** Formally **UNVERIFIED**. Real webcam compositing via OBS Virtual Camera into a live Discord video call has not been validated on physical camera hardware.
+- **Real-World Discord Ingestion:** Real video compositing and stability in a live Discord video call remain unverified on physical hardware.
 - **Performance Figures:** CPU (< 1.0%), RAM (< 30 MB), latency (< 100 ms), and battery life are **unmeasured engineering design targets**, not benchmarked facts.
+- **Git Repository Status:** All development is local on branch `feature/ble-heart-rate-poc`; no remote repository or published PR exists.
 
-## 5. Team Collaboration & Governance
+## 4. Team Collaboration, Permissions & Safety
 - Team coordination is conducted via **Team MCP tools (preferred)** or the AionCore Team CLI (`"$AIONUI_HELPER_BIN" team ...`).
 - Teammates must report task progress using `team_task_update` and message the leader via `team_send_message`.
 - Teammates must not execute lead-only commands.
 - Teammates must check incoming mailbox messages (`team_read_messages`) before and after task execution.
-- Documentation-only tasks must not touch source code (`src/`), `README.md`, `Cargo.toml`, or commit changes while implementation agents work. Do not commit other agents' working tree changes.
+- Documentation-only tasks must not touch source code, build scripts, or commit changes while implementation agents work. Do not commit other agents' working tree changes.
+- **Safety Rules:**
+  - Per-user (`CurrentUser`) virtual camera testing authorization persists from user approval.
+  - Never alter Windows camera privacy settings or HKLM registry.
+  - Never initiate autonomous Discord calls or send Discord messages.
 
-## 6. Active Delegations & QA Workflow
-- **Native UI QA:** Completed by Antigravity (`01a1ac15-a3be...`) in `docs/reports/antigravity-ui-qa.md`.
-- **Overlay QA:** Completed by Antigravity (`01a1ac15-a312...`); HTTP/SSE, demo/offline states and route checks passed. See `docs/reports/antigravity-overlay-qa.md`. Browser/OBS/Discord rendering remains unverified.
-- **MSVC build:** VS2022 Build Tools at `D:\VSBuildTools` compiled the application offline successfully. Isolated artifact: `target/msvc-verified/x86_64-pc-windows-msvc/release/band-heart-beat.exe` (1,004,032 bytes, not launched). The GNU release remains the runtime-tested artifact.
-- **Physical Validation Gate:** Hardware validation with a physical HUAWEI Band 10 remains required before production claims can be made.
+## 5. Active Delegations & Next Steps
+- **Release Archive QA:** In progress by teammate Antigravity (`01a1ac15-a312...`) under task `01a1ad31-a163-7b71-9e06-ed97f8a1d7ad`.
+- **Memory Refresh:** Completed by Antigravity (`01a1ac15-a3be...`) in `docs/reports/antigravity-standalone-status.md`.

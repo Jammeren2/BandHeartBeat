@@ -612,6 +612,9 @@ unsafe fn draw_text(
     color: u32,
     text: &str,
 ) {
+    if text.is_empty() {
+        return;
+    }
     use windows::core::w;
     use windows::Win32::Graphics::Gdi::*;
     let font = CreateFontW(

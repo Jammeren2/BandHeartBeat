@@ -1,6 +1,6 @@
 # Standalone archive acceptance
 
-This report independently checked the frozen archive without rebuilding or changing its source.
+This acceptance rerun was performed by the implementation author, not an independent reviewer. The frozen archive itself was not rebuilt during its failing startup test. Subsequent local diagnostic builds belong to the separately assigned startup-fix task.
 
 ## Archive and package integrity
 
@@ -18,7 +18,7 @@ This report independently checked the frozen archive without rebuilding or chang
 - **PASS** `camera-producer.exe --list-machine`: friendly names were `USB2.0 Camera` and `Iriun Webcam`; the package selector path is name-based in native tray code and excludes only the product's own virtual source.
 - **PASS** Native producer/DirectShow in-process checks from the frozen integration work: allocator/Receive samples, IAMStreamConfig, capture category, valid/invalid IPC fallback and unload/refcount checks. Current isolated `filter-probe.exe` was run successfully as part of package validation.
 - **PASS** Frozen package archive hash and extraction contents.
-- **NOT RUN / blocked** Package `BandHeartBeat.exe --demo` startup/telemetry: the executable crashed immediately with exit `0xC000041D`/`0xC0000005` in `user32.dll` on this QA session; `/telemetry` never became reachable. The same crash reproduced with `target/release/band-heart-beat.exe` and debug `cargo run -- --demo`, so this is an environment/source startup defect requiring a separate fix. No camera-producer child was started by the crashing app.
+- **FAIL** Package `BandHeartBeat.exe --demo` startup/telemetry: the executable crashed immediately with exit `0xC000041D`/`0xC0000005` in `user32.dll` on this QA session; `/telemetry` never became reachable. The same crash reproduced with `target/release/band-heart-beat.exe` and debug `cargo run -- --demo`, so this is an environment/source startup defect requiring a separate fix. No camera-producer child was started by the crashing app.
 - **NOT RUN** GUI visual acceptance, named tray interaction, live webcam-face tracking quality, Discord call, physical camera end-to-end. No GUI/browser automation or Discord operation was performed.
 - **CLEANUP PASS** No own registration was left installed; HKCU CLSID/category queries were absent. No unknown process was stopped. No privacy/HKLM settings changed.
 
