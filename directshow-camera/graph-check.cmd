@@ -8,3 +8,17 @@ directshow-camera\out\graph-probe.exe
 
 if errorlevel 1 exit /b %errorlevel%
 directshow-camera\out\graph-probe.exe --rgb24
+
+for %%F in (15 20 24 25 30) do (
+ directshow-camera\out\graph-probe.exe --rgb24 %%F --consumer
+ if errorlevel 1 exit /b 1
+)
+
+cl /nologo /std:c++17 /EHsc /MT /W4 /Fodirectshow-camera\out\consumer_format_probe.obj directshow-camera\consumer_format_probe.cpp /link /OUT:directshow-camera\out\consumer-format-probe.exe ole32.lib strmiids.lib
+if errorlevel 1 exit /b %errorlevel%
+directshow-camera\out\consumer-format-probe.exe
+if errorlevel 1 exit /b %errorlevel%
+if exist dist\desktop-v5\BandHeartBeatDirectShow.dll directshow-camera\out\consumer-format-probe.exe dist\desktop-v5\BandHeartBeatDirectShow.dll --old
+
+if errorlevel 1 exit /b %errorlevel%
+directshow-camera\out\graph-probe.exe --rgb24 30 --consumer --fail-commit
