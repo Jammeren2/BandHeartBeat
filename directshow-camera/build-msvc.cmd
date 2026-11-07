@@ -18,3 +18,5 @@ if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 /DBH_ISOLATED_TEST /Fo"%OUT%\controls_probe.obj" directshow-camera\controls_probe.cpp /link /OUT:"%OUT%\controls-probe.exe" user32.lib gdi32.lib
 if errorlevel 1 exit /b %errorlevel%
 cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 /DBH_ISOLATED_TEST /Fo"%OUT%\desktop_test.obj" directshow-camera\desktop.cpp /link /SUBSYSTEM:WINDOWS /OUT:"%OUT%\desktop-test.exe" user32.lib gdi32.lib shell32.lib advapi32.lib uxtheme.lib dwmapi.lib
+if errorlevel 1 exit /b %errorlevel%
+cl /nologo /std:c++17 /O2 /EHsc /MT /utf-8 /W4 /Fo"%OUT%\tracking_probe.obj" directshow-camera\tracking_probe.cpp /link /OUT:"%OUT%\tracking-probe.exe"

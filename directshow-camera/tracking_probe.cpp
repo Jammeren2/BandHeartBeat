@@ -1,0 +1,10 @@
+﻿#include "tracking.h"
+#include <iostream>
+#include <cmath>
+#define CHECK(x) do{if(!(x)){std::cerr<<"FAIL line "<<__LINE__<<" "<<#x<<"\n";return 1;}}while(0)
+int main(){CameraControls c;Anchor a;a.Update({{120,80,80,100}},0,c);float x=a.x,y=a.y;a.Update({},0,c);CHECK(a.mode==AnchorMode::Holding&&!a.tracking&&a.visible);a.Update({},1900,c);CHECK(a.x==x&&a.y==y&&a.mode==AnchorMode::Holding);a.Update({},2000,c);CHECK(a.x==x&&a.y==y&&a.mode==AnchorMode::Fallback);a.Update({},2100,c);CHECK(a.x>x&&a.x<448&&a.y>y&&a.y<382);for(int t=2300;t<=6000;t+=100)a.Update({},t,c);CHECK(std::abs(a.x-448)<.1f&&std::abs(a.y-382)<.1f);
+ Anchor b;b.Update({{120,80,80,100}},0,c);b.Update({},100,c);b.Update({},1800,c);b.Update({{220,100,80,100}},1900,c);CHECK(b.tracking&&b.mode==AnchorMode::Tracking&&b.x>x&&b.x<314);b.Update({},2000,c);b.Update({},3850,c);CHECK(b.mode==AnchorMode::Holding);c.fallback=0;b.Update({},3900,c);CHECK(!b.visible&&b.mode==AnchorMode::Fallback);b.Update({{600,450,40,30}},4200,c);CHECK(b.visible&&b.tracking&&b.x>=0&&b.x+180<=640&&b.y+86<=480);
+ c.attach=0;c.manual_x=630;c.manual_y=470;c.size=140;b.Update({},4300,c);CHECK(b.mode==AnchorMode::Manual&&b.x+252<=640&&b.y+120.4f<=480.1f);
+ Anchor cached;cached.Update({{100,100,80,100}},1000,c=CameraControls{},1000);cached.Update({{100,100,80,100}},1400,c,1000);cached.Update({},2900,c);CHECK(cached.mode==AnchorMode::Holding);cached.Update({},3000,c);CHECK(cached.mode==AnchorMode::Fallback);Anchor slow;slow.Update({{100,100,80,100}},0,c);slow.Update({},2500,c);CHECK(slow.mode==AnchorMode::Fallback&&slow.x>194&&slow.x<448);Anchor initial;initial.Update({},0,c);CHECK(initial.mode==AnchorMode::Searching&&!initial.tracking);initial.Update({},100,c);CHECK(initial.x>=0&&initial.x+180<=640);
+ Anchor fast;fast.Update({{100,100,80,100}},0,c);for(int t=100;t<=2500;t+=100)fast.Update({},t,c);CHECK(std::abs(fast.x-slow.x)<.001f&&std::abs(fast.y-slow.y)<.001f);
+ std::cout<<"PASS hold loss0/1.9/2.0/2.1s, smooth corner/reacquire, hide and clamp\n";}
