@@ -4,6 +4,7 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 export type Style = "capsule" | "heart" | "ecg" | "ring" | "minimal" | "card";
 export type Placement = "track" | "fixed";
 export type Fit = "contain" | "cover";
+export type FacePoint = "auto" | "above" | "left" | "right" | "chin" | "left_shoulder" | "right_shoulder";
 
 export interface Settings {
   camera: string | null;
@@ -15,6 +16,10 @@ export interface Settings {
   size: number;
   smoothing: number;
   pulse_animation: boolean;
+  badge_background: boolean;
+  face_point: FacePoint;
+  /** Offset from the face point, in face widths. */
+  point_offset: [number, number];
   auto_scan: boolean;
   last_device: string | null;
 }
@@ -31,6 +36,8 @@ export interface CameraStatus {
   mode: { width: number; height: number; fps: number } | null;
   fps: number;
   face: boolean;
+  /** x, y, w, h in 0..1 of the output frame. */
+  face_box: [number, number, number, number] | null;
   error: string | null;
 }
 
@@ -62,6 +69,19 @@ export const api = {
     return invoke<void>("watch_preview", { channel });
   },
 };
+
+/** Must match `FacePoint::position` in crates/core/src/settings.rs. */
+export const FACE_POINTS: { id: Exclude<FacePoint, "auto">; label: string; at: [number, number] }[] = [
+  { id: "above", label: "Над головой", at: [0.5, -0.35] },
+  { id: "left", label: "Слева", at: [-0.45, 0.35] },
+  { id: "right", label: "Справа", at: [1.45, 0.35] },
+  { id: "chin", label: "Под подбородком", at: [0.5, 1.3] },
+  { id: "left_shoulder", label: "Левое плечо", at: [-0.6, 1.6] },
+  { id: "right_shoulder", label: "Правое плечо", at: [1.6, 1.6] },
+];
+
+/** Styles whose plate can be switched off. */
+export const PLATED: Style[] = ["capsule", "ecg", "card"];
 
 export const STYLES: { id: Style; label: string }[] = [
   { id: "capsule", label: "Капсула" },

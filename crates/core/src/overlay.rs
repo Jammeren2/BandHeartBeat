@@ -41,6 +41,8 @@ pub struct Frame<'a> {
     pub style: OverlayStyle,
     pub scale: f32,
     pub animate: bool,
+    /// Plate behind capsule, ECG and card; without it text gets a shadow.
+    pub background: bool,
     /// Seconds since start; drives the beat and the ECG sweep.
     pub time: f32,
 }
@@ -95,10 +97,12 @@ impl Renderer {
 
         match f.style {
             OverlayStyle::Capsule => {
-                c.rrect(2.0, 2.0, 172.0, 64.0, 32.0, alpha(rgb(10, 12, 16), 0.6), Some(alpha(white(), 0.18)));
-                c.circle(34.0, 34.0, 23.0, alpha(coral(), 0.18));
+                if f.background {
+                    c.rrect(2.0, 2.0, 172.0, 64.0, 32.0, alpha(rgb(10, 12, 16), 0.6), Some(alpha(white(), 0.18)));
+                    c.circle(34.0, 34.0, 23.0, alpha(coral(), 0.18));
+                }
                 c.heart(34.0, 35.0, 30.0 * (1.0 + 0.14 * beat), accent);
-                c.text(&self.bold, &text, 40.0, 66.0, 48.0, white(), Align::Left, false);
+                c.text(&self.bold, &text, 40.0, 66.0, 48.0, white(), Align::Left, !f.background);
             }
             OverlayStyle::Heart => {
                 let size = 84.0 * (1.0 + 0.12 * beat);
@@ -107,11 +111,16 @@ impl Renderer {
                 c.text(&self.bold, &text, 38.0, 55.0, 120.0, white(), Align::Center, true);
             }
             OverlayStyle::Ecg => {
-                c.rrect(2.0, 2.0, 192.0, 82.0, 14.0, alpha(rgb(6, 20, 18), 0.72), Some(alpha(teal(), 0.45)));
+                let shadow = !f.background;
+                if f.background {
+                    c.rrect(2.0, 2.0, 192.0, 82.0, 14.0, alpha(rgb(6, 20, 18), 0.72), Some(alpha(teal(), 0.45)));
+                } else {
+                    c.ecg(15.0, 11.5, 168.0, 32.0, f, alpha(rgb(0, 0, 0), 0.5));
+                }
                 c.ecg(14.0, 10.0, 168.0, 32.0, f, if live { teal() } else { muted() });
-                c.text(&self.mono, &text, 28.0, 14.0, 74.0, teal(), Align::Left, false);
+                c.text(&self.mono, &text, 28.0, 14.0, 74.0, teal(), Align::Left, shadow);
                 let bw = c.width(&self.mono, &text, 28.0);
-                c.text(&self.mono, "BPM", 14.0, 20.0 + bw, 74.0, alpha(teal(), 0.8), Align::Left, false);
+                c.text(&self.mono, "BPM", 14.0, 20.0 + bw, 74.0, alpha(teal(), 0.8), Align::Left, shadow);
             }
             OverlayStyle::Ring => {
                 c.circle(56.0, 56.0, 52.0, alpha(rgb(10, 12, 16), 0.6));
@@ -128,12 +137,21 @@ impl Renderer {
                 c.heart(tw + 26.0, 48.0, 22.0 * (1.0 + 0.2 * beat), accent);
             }
             OverlayStyle::Card => {
-                c.rrect(2.0, 2.0, 186.0, 96.0, 16.0, alpha(white(), 0.93), None);
-                c.heart(26.0, 34.0, 22.0 * (1.0 + 0.18 * beat), if live { rgb(0xD9, 0x36, 0x3E) } else { muted() });
-                c.text(&self.bold, &text, 32.0, 44.0, 45.0, ink(), Align::Left, false);
+                // Without the white plate the card switches to light text over video.
+                let (fg, sub, line, shadow) = if f.background {
+                    c.rrect(2.0, 2.0, 186.0, 96.0, 16.0, alpha(white(), 0.93), None);
+                    (ink(), rgb(0x5F, 0x64, 0x6E), rgb(0xD9, 0x36, 0x3E), false)
+                } else {
+                    (white(), alpha(white(), 0.8), coral(), true)
+                };
+                c.heart(26.0, 34.0, 22.0 * (1.0 + 0.18 * beat), if live { line } else { muted() });
+                c.text(&self.bold, &text, 32.0, 44.0, 45.0, fg, Align::Left, shadow);
                 let tw = c.width(&self.bold, &text, 32.0);
-                c.text(&self.bold, "BPM", 13.0, 50.0 + tw, 45.0, rgb(0x5F, 0x64, 0x6E), Align::Left, false);
-                c.sparkline(14.0, 58.0, 162.0, 30.0, f.history, rgb(0xD9, 0x36, 0x3E));
+                c.text(&self.bold, "BPM", 13.0, 50.0 + tw, 45.0, sub, Align::Left, shadow);
+                if shadow {
+                    c.sparkline(15.0, 59.5, 162.0, 30.0, f.history, alpha(rgb(0, 0, 0), 0.5));
+                }
+                c.sparkline(14.0, 58.0, 162.0, 30.0, f.history, line);
             }
         }
         pm
@@ -377,8 +395,10 @@ mod tests {
             OverlayStyle::Card,
         ] {
             for bpm in [Some(87), None] {
-                let pm = r.render(&Frame { bpm, history: &[80, 85, 90], style, scale: 1.0, animate: true, time: 0.3 });
-                assert!(pm.pixels().iter().any(|p| p.alpha() > 200), "{style:?} {bpm:?}");
+                for background in [true, false] {
+                    let pm = r.render(&Frame { bpm, history: &[80, 85, 90], style, scale: 1.0, animate: true, background, time: 0.3 });
+                    assert!(pm.pixels().iter().any(|p| p.alpha() > 200), "{style:?} {bpm:?}");
+                }
             }
         }
     }

@@ -22,6 +22,8 @@ pub struct Status {
     pub mode: Option<Mode>,
     pub fps: f32,
     pub face: bool,
+    /// Latest face box (x, y, w, h) in 0..1 output coordinates, for the UI.
+    pub face_box: Option<[f32; 4]>,
     pub error: Option<String>,
 }
 
@@ -153,6 +155,7 @@ impl Worker {
                 style: s.style,
                 scale: s.size,
                 animate: s.pulse_animation,
+                background: s.badge_background,
                 time: started.elapsed().as_secs_f32(),
             });
             let (cx, cy) = follower.step(
@@ -163,6 +166,8 @@ impl Worker {
                     smoothing: s.smoothing,
                     frame: (OUT_W as f32, OUT_H as f32),
                     overlay: (badge.width() as f32, badge.height() as f32),
+                    face_point: s.face_point,
+                    point_offset: s.point_offset,
                 },
             );
             blend_onto(&mut frame, OUT_W, OUT_H, &badge, cx, cy);
@@ -177,6 +182,10 @@ impl Worker {
                 }
             }
 
+            {
+                let fresh = detection.and_then(|(f, at)| f.filter(|_| at.elapsed() < Duration::from_secs(1)));
+                self.status.lock().unwrap().face_box = fresh.map(|f| [f.x, f.y, f.w, f.h]);
+            }
             fps_window.1 += 1;
             let elapsed = fps_window.0.elapsed();
             if elapsed >= Duration::from_secs(1) {

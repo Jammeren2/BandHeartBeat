@@ -1,7 +1,7 @@
 // App state: a live snapshot polled from Rust plus optimistic settings edits.
 import { api, type CameraInfo, type Settings, type Snapshot } from "./api";
 
-const POLL_MS = 500;
+const POLL_MS = 200;
 const SAVE_DELAY_MS = 120;
 
 class Store {

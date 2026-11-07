@@ -1,7 +1,7 @@
 //! Head tracking with the built-in Windows face detector, and the smoothing
 //! that turns detections into a calm overlay position.
 
-use crate::settings::Placement;
+use crate::settings::{FacePoint, Placement};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -100,6 +100,9 @@ pub struct FollowInput {
     pub smoothing: f32,
     pub frame: (f32, f32),
     pub overlay: (f32, f32),
+    pub face_point: FacePoint,
+    /// Offset from `face_point` in face widths.
+    pub point_offset: (f32, f32),
 }
 
 impl Follower {
@@ -117,7 +120,14 @@ impl Follower {
             }
         }
         let target = match (input.placement, self.last_face) {
-            (Placement::Track, Some((face, at))) if now - at < HOLD => beside(&face, fw, fh, ow, oh),
+            (Placement::Track, Some((face, at))) if now - at < HOLD => match input.face_point.position() {
+                None => beside(&face, fw, fh, ow, oh),
+                Some(p) => {
+                    let (x, y) = point_px(&face, p, fw, fh);
+                    let unit = face.w * fw;
+                    (x + input.point_offset.0 * unit, y + input.point_offset.1 * unit)
+                }
+            },
             _ => anchor,
         };
         let target = clamp_inside(target, fw, fh, ow, oh);
@@ -133,6 +143,11 @@ impl Follower {
         self.pos = Some(pos);
         pos
     }
+}
+
+/// A face-box-relative point in output pixels.
+pub fn point_px(face: &FaceBox, (px, py): (f32, f32), fw: f32, fh: f32) -> (f32, f32) {
+    ((face.x + face.w * px) * fw, (face.y + face.h * py) * fh)
 }
 
 /// Overlay centre just right of the head at eye level, or left when there is no room.
@@ -160,7 +175,15 @@ mod tests {
     use super::*;
 
     fn input(placement: Placement) -> FollowInput {
-        FollowInput { placement, anchor: (0.8, 0.2), smoothing: 0.0, frame: (1280.0, 720.0), overlay: (200.0, 80.0) }
+        FollowInput {
+            placement,
+            anchor: (0.8, 0.2),
+            smoothing: 0.0,
+            frame: (1280.0, 720.0),
+            overlay: (200.0, 80.0),
+            face_point: FacePoint::Auto,
+            point_offset: (0.0, 0.0),
+        }
     }
 
     #[test]
@@ -172,6 +195,19 @@ mod tests {
         let mut f = Follower::default();
         let (x, y) = f.step(None, &input(Placement::Track));
         assert_eq!((x, y), (1024.0, 144.0));
+    }
+
+    #[test]
+    fn follows_chosen_point_with_offset() {
+        let mut f = Follower::default();
+        let face = FaceBox { x: 0.4, y: 0.3, w: 0.2, h: 0.3 };
+        let mut i = input(Placement::Track);
+        i.face_point = FacePoint::Chin;
+        i.point_offset = (0.5, 0.0);
+        let (x, y) = f.step(Some((Some(face), Instant::now())), &i);
+        // Chin is (0.5, 1.3) of the box; +0.5 face widths to the right.
+        assert!((x - (0.5 * 1280.0 + 0.5 * 0.2 * 1280.0)).abs() < 0.5);
+        assert!((y - (0.3 + 0.3 * 1.3) * 720.0).abs() < 0.5);
     }
 
     #[test]
