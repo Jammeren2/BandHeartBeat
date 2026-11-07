@@ -1,0 +1,4 @@
+LIBRARY BandHeartBeatCamera
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE

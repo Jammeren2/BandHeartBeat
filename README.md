@@ -1,31 +1,52 @@
 # BandHeartBeat
 
-Самостоятельная сборка без OBS: `dist/standalone/BandHeartBeat.exe`. Нативное меню камер, установка/откат и ограничения описаны в [инструкции](directshow-camera/STANDALONE-RU.md). Сборка пакета: `cmd /c directshow-camera\package-msvc.cmd`. Ниже сохранён запасной OBS-путь.
+Пульс с часов прямо на веб-камере в Discord — без OBS. Приложение берёт пульс
+с часов по Bluetooth, захватывает вашу камеру, рисует рядом с головой значок
+пульса и отдаёт готовую картинку как виртуальную камеру **«BandHeartBeat Camera»**.
 
-Lightweight native Windows heart-rate monitor. Use a device broadcasting the standard Bluetooth SIG Heart Rate Service (0x180D), keep Windows Bluetooth on, then open `target/release/band-heart-beat.exe`.
+## Как пользоваться
 
-The compact dark window shows real BLE heart-rate measurements. Closing or minimizing hides it in the notification area. Left-click its tray icon to show it; right-click for **Показать**, **Повторить подключение**, or **Выйти**. Retry starts a fresh scan after a failure; an active scan/connection is never duplicated. No readings for 20 seconds ends the connection and clears the value.
+1. Запустите BandHeartBeat. Виртуальная камера регистрируется сама (только для
+   текущего пользователя, права администратора не нужны).
+2. Включите на часах трансляцию пульса. Часы ищутся постоянно в фоне;
+   подошедшие часы запоминаются.
+3. Внизу выберите свою камеру. Превью показывает ровно тот кадр, который
+   получит Discord: 1280×720, 16:9, без обрезки (режим «Целиком»).
+4. В Discord: Настройки → Голос и видео → Камера → «BandHeartBeat Camera».
 
-For an explicitly labeled UI preview without hardware: `band-heart-beat.exe --demo`. Demo shows a fixed example of 72 BPM and never claims a live connection. Normal mode never generates readings.
+Значок может следовать за головой или стоять на месте (перетащите его по
+превью). Шесть стилей: капсула, сердце, ЭКГ, кольцо, минимал, карточка.
+Закрытие окна сворачивает приложение в трей; выход — из меню трея.
 
-If no device is found, enable standard heart-rate broadcasting on a supported device and check that another host is not connected. **Huawei Band 10 compatibility and the availability of a broadcast setting are unconfirmed.**
+Поддерживаются устройства со стандартным Bluetooth-сервисом пульса (0x180D):
+браслеты Huawei/Honor в режиме трансляции пульса, Xiaomi во время тренировки,
+нагрудные датчики. Совместимость конкретно с HUAWEI Band 10 официально не
+подтверждена.
 
-## Build
+## Устройство
 
-Use Rust and Visual Studio C++ Build Tools: `cargo build --release`.
-With the GNU Rust toolchain and MinGW installed: `rustup run stable-x86_64-pc-windows-gnu cargo build --release --offline`.
-Both write `target/release/band-heart-beat.exe`. Run `cargo fmt --check` and `rustup run stable-x86_64-pc-windows-gnu cargo test --offline` for local checks.
+```
+crates/core   ядро на Rust: ble, camera (Media Foundation), tracking (Windows
+              FaceDetector), overlay (tiny-skia), pipeline, frame (общая память),
+              settings (%APPDATA%\BandHeartBeat\settings.json), vcam (реестр HKCU)
+app           Tauri 2 + Svelte 5: src-tauri — команды, src — интерфейс
+vcam          DirectShow-фильтр виртуальной камеры (C++, ~700 строк),
+              читает кадры приложения из общей памяти
+```
 
-No Huawei hardware was available for validation. Huawei Band 10 compatibility remains unconfirmed.
+## Сборка
 
-## Оверлей рядом с головой в Discord
+Нужны Rust (MSVC), Node.js и Visual Studio Build Tools.
 
-1. Запустите приложение. Для проверки без устройства: `band-heart-beat.exe --demo` (показания явно помечены «ДЕМО»).
-2. В OBS Studio добавьте источник **Устройство захвата видео** и выберите свою веб-камеру.
-3. Добавьте поверх камеры источник **Браузер**: URL `http://127.0.0.1:8765/overlay`, ширина 480, высота 240. Фон страницы прозрачный. В трее приложения есть пункт «Открыть оверлей OBS» для просмотра.
-4. Перетащите оверлей рядом с головой, измените размер при необходимости. Положение задаётся вручную в OBS; отслеживания лица нет.
-5. Нажмите **Запустить виртуальную камеру** в OBS. В настройках видео Discord выберите **OBS Virtual Camera**. Камеру использует OBS, а Discord получает готовую композицию.
+```
+vcam\build.cmd              DLL виртуальной камеры → vcam\out
+vcam\test.cmd               DLL + проверка на реальном DirectShow-графе
+cargo test -p bhb-core      тесты ядра
+cd app && npm install
+npx tauri dev               запуск в режиме разработки
+npx tauri build             установщик NSIS
+```
 
-Держите OBS и BandHeartBeat запущенными. При отключении браслета показание меняется на тире, а анимация останавливается. Повтор подключения — через трей. Движение сердца рассчитывается по BPM и служит визуализацией частоты, а не измеренным временем отдельных ударов. В демо сердце анимировано по фиксированному примеру 72 BPM.
-
-Сервер слушает только `127.0.0.1:8765`, отдаёт встроенную страницу и SSE `/events`, не читает файлы компьютера. Не более 8 подключений одновременно. Если порт занят, приложение показывает предупреждение: закройте другой экземпляр/программу на этом порту и перезапустите BandHeartBeat. В OBS можно отключить источник, когда он не виден, чтобы остановить браузерную анимацию.
+Полезные примеры ядра:
+`cargo run --release -p bhb-core --example capture -- out.jpg 0` — прогнать
+камеру через весь конвейер и сохранить кадр; `--example badges` — все стили значка.

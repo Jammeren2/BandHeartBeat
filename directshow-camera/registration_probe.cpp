@@ -1,9 +1,0 @@
-﻿#define NOMINMAX
-#include <windows.h>
-#include <iostream>
-#include "registration_store.h"
-#include "registration_action.h"
-#define CHECK(x) do{if(!(x)){std::cerr<<"FAIL "<<__LINE__<<" "<<#x<<"\n";return 1;}}while(0)
-int main(){RegistrationStore s(L"Software\\BandHeartBeat\\RegistrationQa");CHECK(!s.Any());wchar_t dll[32768];GetFullPathNameW(L"directshow-camera\\out\\BandHeartBeatDirectShow.dll",32768,dll,nullptr);CHECK(s.Install(dll)==S_OK);CHECK(s.Owned());CHECK(s.Install(dll)==HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS));CHECK(s.Remove()==S_OK);CHECK(s.Install(dll)==S_OK);CHECK(s.Put(s.cls+L"\\InprocServer32",nullptr,L"Z:\\missing\\BandHeartBeatDirectShow.dll")==S_OK);CHECK(s.Remove()==S_OK);
- CHECK(s.Put(s.category,L"CLSID",RegistrationStore::id)==S_OK);CHECK(s.Remove()==S_OK);CHECK(s.Put(s.cls,L"Product",L"BandHeartBeat")==S_OK);CHECK(s.Remove()==S_OK);CHECK(s.Put(s.cls+L"\\InprocServer32",nullptr,L"Z:\\missing\\BandHeartBeatDirectShow.dll")==S_OK);CHECK(s.Remove()==S_OK);
- CHECK(s.Put(s.category,L"FriendlyName",L"Foreign Camera")==S_OK);CHECK(s.Remove()==E_ACCESSDENIED);CHECK(s.Any());RegDeleteTreeW(HKEY_CURRENT_USER,s.category.c_str());CHECK(!s.Any());CHECK(s.Remove()==S_OK);CHECK(std::wstring(RegistrationCommand(RegistrationAction::Install))==L"--register");CHECK(std::wstring(RegistrationCommand(RegistrationAction::Remove))==L"--unregister");CHECK(RegistrationResult(3,0,L"HRESULT 0x80070005").find(L"80070005")!=std::wstring::npos);CHECK(RegistrationResult(2,0,L"").find(L"exit=2")!=std::wstring::npos);CHECK(RegistrationResult(1,2,L"").find(L"Win32 2")!=std::wstring::npos);RegDeleteTreeW(HKEY_CURRENT_USER,L"Software\\BandHeartBeat\\RegistrationQa");std::cout<<"PASS isolated install/remove/reinstall, stale/missingDLL, partial, foreign refusal, action dispatch/result failures; testkeys absent\n";}

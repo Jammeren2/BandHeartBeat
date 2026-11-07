@@ -1,0 +1,155 @@
+:root {
+  --bg-0: #0f0d16;
+  --bg-1: #1b1726;
+  --bg-glow: #3a2d55;
+  --glass: rgba(255, 255, 255, 0.06);
+  --glass-strong: rgba(255, 255, 255, 0.1);
+  --line: rgba(255, 255, 255, 0.11);
+  --text: #f4f2f8;
+  --text-2: #d6d2e2;
+  --muted: #a9a3bc;
+  --accent: #ff7a90;
+  --accent-soft: rgba(255, 122, 144, 0.16);
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --radius: 22px;
+  --font: "Inter Variable", "Segoe UI", sans-serif;
+  --font-display: "Manrope Variable", "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font: 14px/1.4 var(--font);
+  color: var(--text);
+  background: radial-gradient(80% 90% at 70% 0%, var(--bg-glow) 0%, var(--bg-1) 55%, var(--bg-0) 100%) fixed;
+  overflow: hidden;
+  user-select: none;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  backdrop-filter: blur(16px);
+}
+
+.section-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--muted);
+}
+.dot.ok {
+  background: var(--ok);
+  box-shadow: 0 0 10px var(--ok);
+}
+.dot.warn {
+  background: var(--warn);
+}
+.dot.bad {
+  background: var(--bad);
+}
+.dot.live {
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  cursor: pointer;
+}
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.slider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+.slider .row {
+  display: flex;
+  justify-content: space-between;
+}
+.slider input {
+  accent-color: var(--accent);
+  width: 100%;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--glass-strong);
+  font-weight: 600;
+  font-size: 13px;
+}
+.btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+}
+.btn.danger {
+  color: var(--bad);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}

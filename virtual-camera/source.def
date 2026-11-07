@@ -1,8 +1,0 @@
-LIBRARY BandHeartBeatSource
-EXPORTS
-    DllGetClassObject
-    DllCanUnloadNow
-    DllRegisterServer
-    DllUnregisterServer
-    CreatePlaceholderSource
-    CreatePlaceholderStream
