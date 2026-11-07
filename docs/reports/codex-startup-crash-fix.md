@@ -8,6 +8,7 @@ Validation:
 
 - Debug MSVC build: demo remains alive and `/telemetry` returns `72 0 1`.
 - Rebuilt standalone MSVC release: **three consecutive** fresh `--demo` starts remained alive, returned `72 0 1` with bounded HTTP timeout, and left no producer process running automatically. Only owned test app processes were terminated afterward.
+- Re-extracted the replacement ZIP into `target/qa-startup-fixed-20261107` and repeated the bounded startup/telemetry/no-producer check successfully. The owned extracted-package process was closed and reaped within three seconds; no GUI automation was used.
 - `cargo fmt --check`: passed. GNU offline tests and isolated MSVC offline tests: 2/2 passed on both toolchains. Some compiler processes were slow on this host but finished successfully.
 - `cmd /c directshow-camera\package-msvc.cmd`: succeeded. No physical camera, registry/privacy/HKLM operation or Discord interaction was performed for this fix.
 
